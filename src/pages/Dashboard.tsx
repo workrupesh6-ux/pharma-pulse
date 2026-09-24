@@ -6,7 +6,16 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { REFRESH_INTERVAL_MS, useLiveQuotes } from "@/hooks/use-live-quotes";
 import { useNow } from "@/hooks/use-now";
-import { SECTORS, SORT_OPTIONS, sortBoard, summarize, type BoardRow, type SortKey } from "@/lib/board";
+import {
+  SECTORS,
+  SORT_OPTIONS,
+  rollUpBySector,
+  sortBoard,
+  summarize,
+  type BoardRow,
+  type SectorRollup,
+  type SortKey,
+} from "@/lib/board";
 import {
   directionMark,
   formatClock,
@@ -40,6 +49,7 @@ export default function Dashboard() {
   const open = marketState(new Date(now)) === "open";
   const companies = useMemo(() => board?.companies ?? [], [board]);
   const summary = summarize(companies);
+  const rollups = useMemo(() => rollUpBySector(companies), [companies]);
   const quotesUpdatedAt = board?.quotesUpdatedAt ?? null;
 
   const rows = useMemo(() => {
@@ -170,6 +180,28 @@ export default function Dashboard() {
               <Mover label="best" row={summary.topGainer} />
               <Mover label="worst" row={summary.topLoser} />
             </div>
+          </div>
+        </section>
+
+        {/* Desk rollup ---------------------------------------------------- */}
+        <section className="border-border mt-6 border">
+          <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5">
+            <h2 className="label text-foreground">desk rollup</h2>
+            <span className="label-sm text-muted-foreground">
+              breadth · avg move · best / worst · select to filter
+            </span>
+          </div>
+          <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
+            {rollups.map((rollup) => (
+              <DeskCard
+                key={rollup.sector}
+                rollup={rollup}
+                active={sector === rollup.sector}
+                onToggle={() =>
+                  setSector(sector === rollup.sector ? SECTORS[0] : rollup.sector)
+                }
+              />
+            ))}
           </div>
         </section>
 
@@ -325,6 +357,102 @@ function Mover({ label, row }: { label: string; row: BoardRow | null }) {
         <p className="text-muted-foreground mt-1.5 font-mono text-xs">—</p>
       )}
     </div>
+  );
+}
+
+function DeskCard({
+  rollup,
+  active,
+  onToggle,
+}: {
+  rollup: SectorRollup;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  const breadthShare = rollup.quoted > 0 ? (rollup.advancing / rollup.quoted) * 100 : 50;
+  const average = rollup.averageChangePercent;
+
+  return (
+    <div className={cn("bg-background p-4 transition-colors", active && "bg-accent/30")}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={active}
+        className="group flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span
+          className={cn(
+            "label transition-colors group-hover:text-primary",
+            active ? "text-primary" : "text-foreground",
+          )}
+        >
+          {rollup.sector}
+        </span>
+        <span className="label-sm text-muted-foreground">
+          {rollup.quoted}/{rollup.total}
+        </span>
+      </button>
+
+      <div className="bg-muted mt-3.5 flex h-1.5 overflow-hidden">
+        <div className="bg-gain" style={{ width: `${breadthShare}%` }} />
+        <div className="bg-loss" style={{ width: `${100 - breadthShare}%` }} />
+      </div>
+
+      <div className="label-sm mt-2 flex items-center justify-between">
+        <span className="text-gain">▲ {rollup.advancing}</span>
+        <span className="text-loss">▼ {rollup.declining}</span>
+        <span className="text-muted-foreground">— {rollup.unchanged}</span>
+      </div>
+
+      <div className="border-border mt-3.5 flex items-baseline justify-between gap-3 border-t pt-3">
+        <span className="label-sm text-muted-foreground">avg move</span>
+        <span
+          className={cn(
+            "tabular font-mono text-xs",
+            average === null || average === 0
+              ? "text-muted-foreground"
+              : average > 0
+                ? "text-gain"
+                : "text-loss",
+          )}
+        >
+          {formatPercent(average)}
+        </span>
+      </div>
+
+      <div className="border-border mt-2.5 flex items-baseline justify-between gap-3 border-t pt-2.5">
+        <span className="label-sm text-muted-foreground">best</span>
+        <RollupMover row={rollup.best} />
+      </div>
+
+      <div className="border-border mt-2 flex items-baseline justify-between gap-3 border-t pt-2">
+        <span className="label-sm text-muted-foreground">worst</span>
+        <RollupMover row={rollup.worst} />
+      </div>
+    </div>
+  );
+}
+
+function RollupMover({ row }: { row: BoardRow | null }) {
+  if (!row) return <span className="text-muted-foreground font-mono text-xs">—</span>;
+
+  const positive = (row.changePercent ?? 0) >= 0;
+
+  return (
+    <Link
+      to={`/stock/${row.symbol}`}
+      className="hover:text-primary flex items-baseline gap-1.5 transition-colors"
+    >
+      <span className="font-mono text-[0.68rem] tracking-[0.08em]">{row.symbol}</span>
+      <span
+        className={cn(
+          "tabular font-mono text-[0.68rem]",
+          positive ? "text-gain" : "text-loss",
+        )}
+      >
+        {formatPercent(row.changePercent)}
+      </span>
+    </Link>
   );
 }
 
