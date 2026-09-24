@@ -77,6 +77,8 @@ const schema = defineSchema(
           publishedAt: v.optional(v.number()),
         }),
       ),
+      // Which feed these came from, so the provenance stays visible.
+      provider: v.optional(v.string()),
       updatedAt: v.number(),
       error: v.optional(v.string()),
     }).index("by_symbol", ["symbol"]),

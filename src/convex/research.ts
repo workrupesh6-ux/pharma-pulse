@@ -8,7 +8,7 @@ import { PHARMA_COMPANIES } from "./pharmaData";
  *
  * Fundamentals are derived from a year of real price history: the 52-week range,
  * trailing one-year and year-to-date returns, a 30-day average volume and a
- * downsampled close series for the chart. Headlines come from a public news feed
+ * downsampled close series for the chart. Headlines come from public news feeds
  * scoped to India. Nothing here is estimated or invented — a field is omitted
  * when the upstream feed does not supply it.
  */
@@ -17,7 +17,14 @@ const QUOTE_HOSTS = [
   "https://query2.finance.yahoo.com/v8/finance/chart",
 ];
 
-const USER_AGENT = "Mozilla/5.0 (compatible; NseWatchdog/1.0)";
+/**
+ * A full browser user agent. Public feeds routinely reject obvious bot
+ * identifiers such as `compatible; .../1.0` with a 5xx.
+ */
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+const RSS_ACCEPT = "application/rss+xml, application/xml, text/xml";
 const NEWS_LIMIT = 8;
 const MAX_SERIES_POINTS = 60;
 const MAX_TITLE_LENGTH = 300;
@@ -84,7 +91,9 @@ async function fetchYearChart(symbol: string): Promise<YearChart | null> {
           result?: Array<{
             meta?: Record<string, unknown>;
             timestamp?: number[];
-            indicators?: { quote?: Array<{ close?: (number | null)[]; volume?: (number | null)[] }> };
+            indicators?: {
+              quote?: Array<{ close?: (number | null)[]; volume?: (number | null)[] }>;
+            };
           }>;
         };
       };
@@ -219,7 +228,12 @@ export const refreshFundamentals = action({
   },
 });
 
-/** Minimal RSS reader — the feed's item shape is stable enough for this. */
+/* -------------------------------------------------------------------------
+   Headlines
+   ------------------------------------------------------------------------- */
+
+type NewsItem = { title: string; url: string; source: string; publishedAt?: number };
+
 function decodeEntities(input: string): string {
   return input
     .replace(/&lt;/g, "<")
@@ -248,24 +262,39 @@ function firstTag(block: string, tag: string): string | null {
   return match ? match[1] : null;
 }
 
-function parseRssItems(xml: string) {
+/** Bing wraps the publisher URL in a `url=` parameter; unwrap it. */
+function unwrapBingLink(link: string): string {
+  const match = link.match(/[?&]url=([^&]+)/);
+  if (!match) return link;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return link;
+  }
+}
+
+type FeedShape = {
+  /** Publisher tag: plain `<source>` on Google, namespaced on Bing. */
+  sourceTag: string;
+  unwrapLink: (link: string) => string;
+};
+
+/** Minimal RSS reader — the item shape on these feeds is stable enough for this. */
+function parseFeed(xml: string, shape: FeedShape): NewsItem[] {
   const blocks = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
-  const items: {
-    title: string;
-    url: string;
-    source: string;
-    publishedAt?: number;
-  }[] = [];
+  const items: NewsItem[] = [];
+  const seen = new Set<string>();
 
   for (const block of blocks) {
     const rawTitle = firstTag(block, "title");
     const rawLink = firstTag(block, "link");
     if (!rawTitle || !rawLink) continue;
 
-    const source = cleanText(firstTag(block, "source"));
+    const source = cleanText(firstTag(block, shape.sourceTag));
     let title = cleanText(rawTitle);
+    if (!title) continue;
 
-    // Feed titles end with " - Publisher"; the publisher prints on its own line.
+    // Google ends each title with " - Publisher"; the publisher prints below it.
     if (source) {
       for (const dash of [" - ", " \u2013 ", " \u2014 "]) {
         const suffix = `${dash}${source}`;
@@ -275,14 +304,17 @@ function parseRssItems(xml: string) {
         }
       }
     }
-    if (!title) continue;
+
+    const url = shape.unwrapLink(cleanText(rawLink));
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
 
     const rawDate = cleanText(firstTag(block, "pubDate"));
     const parsedDate = rawDate ? Date.parse(rawDate) : Number.NaN;
 
     items.push({
       title: title.slice(0, MAX_TITLE_LENGTH),
-      url: cleanText(rawLink),
+      url,
       source: source || "Newswire",
       publishedAt: Number.isNaN(parsedDate) ? undefined : parsedDate,
     });
@@ -290,6 +322,32 @@ function parseRssItems(xml: string) {
 
   return items;
 }
+
+type NewsProvider = {
+  name: string;
+  url: (query: string) => string;
+  parse: (xml: string) => NewsItem[];
+};
+
+/**
+ * Google News gives the best Indian coverage but returns 503 for some
+ * datacenter IP ranges, which is exactly where a hosted app runs from. Bing's
+ * news feed is tried next, and links are unwrapped to the original publisher.
+ */
+const NEWS_PROVIDERS: NewsProvider[] = [
+  {
+    name: "google-news",
+    url: (query) =>
+      `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
+    parse: (xml) => parseFeed(xml, { sourceTag: "source", unwrapLink: (link) => link }),
+  },
+  {
+    name: "bing-news",
+    url: (query) =>
+      `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS&setmkt=en-IN&setlang=en`,
+    parse: (xml) => parseFeed(xml, { sourceTag: "News:Source", unwrapLink: unwrapBingLink }),
+  },
+];
 
 export const refreshNews = action({
   args: { symbol: v.string() },
@@ -299,34 +357,46 @@ export const refreshNews = action({
 
     const company = resolveCompany(symbol);
     const updatedAt = Date.now();
-    const feed = `https://news.google.com/rss/search?q=${encodeURIComponent(
-      `${company.name} share`,
-    )}&hl=en-IN&gl=IN&ceid=IN:en`;
+    const query = `${company.name} share`;
 
-    try {
-      const response = await fetchWithTimeout(
-        feed,
-        "application/rss+xml, application/xml, text/xml",
-        12000,
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    let lastError: string | null = null;
 
-      const items = parseRssItems(await response.text()).slice(0, NEWS_LIMIT);
-      await ctx.runMutation(internal.stock.upsertNews, {
-        symbol: company.symbol,
-        items,
-        updatedAt,
-        error: undefined,
-      });
-      return { ok: true, count: items.length };
-    } catch (error) {
-      // Keep any previously cached headlines; only stamp the failure.
-      await ctx.runMutation(internal.stock.upsertNews, {
-        symbol: company.symbol,
-        updatedAt,
-        error: error instanceof Error ? error.message : "News feed unavailable",
-      });
-      return { ok: false };
+    for (const provider of NEWS_PROVIDERS) {
+      try {
+        const response = await fetchWithTimeout(provider.url(query), RSS_ACCEPT, 12000);
+
+        if (!response.ok) {
+          lastError = `${provider.name}: HTTP ${response.status}`;
+          continue;
+        }
+
+        const items = provider.parse(await response.text()).slice(0, NEWS_LIMIT);
+        if (items.length === 0) {
+          lastError = `${provider.name}: feed returned no items`;
+          continue;
+        }
+
+        await ctx.runMutation(internal.stock.upsertNews, {
+          symbol: company.symbol,
+          items,
+          provider: provider.name,
+          updatedAt,
+          error: undefined,
+        });
+        return { ok: true, count: items.length, provider: provider.name };
+      } catch (error) {
+        lastError = `${provider.name}: ${
+          error instanceof Error ? error.message : "request failed"
+        }`;
+      }
     }
+
+    // Every source failed — keep any headlines already on file.
+    await ctx.runMutation(internal.stock.upsertNews, {
+      symbol: company.symbol,
+      updatedAt,
+      error: lastError ?? "No news source reachable",
+    });
+    return { ok: false };
   },
 });

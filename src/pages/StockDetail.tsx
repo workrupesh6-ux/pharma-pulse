@@ -332,7 +332,13 @@ export default function StockDetail() {
           title="recent headlines"
           meta={
             news
-              ? `${news.items.length} items · read ${formatRelative(news.updatedAt, now)}`
+              ? [
+                  `${news.items.length} items`,
+                  news.provider ? `via ${news.provider}` : null,
+                  `read ${formatRelative(news.updatedAt, now)}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               : "loading"
           }
           action={

@@ -68,7 +68,12 @@ export const detail = query({
           }
         : null,
       news: news
-        ? { items: news.items, updatedAt: news.updatedAt, error: news.error ?? null }
+        ? {
+            items: news.items,
+            provider: news.provider ?? null,
+            updatedAt: news.updatedAt,
+            error: news.error ?? null,
+          }
         : null,
     };
   },
@@ -114,6 +119,7 @@ export const upsertNews = internalMutation({
         }),
       ),
     ),
+    provider: v.optional(v.string()),
     updatedAt: v.number(),
     error: v.optional(v.string()),
   },
