@@ -26,10 +26,10 @@ import {
   marketState,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { AlertTriangle, ChevronRight, LogOut, RotateCw, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, ChevronRight, Database, LogOut, RotateCw, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 const NUM = "tabular font-mono text-[0.8rem]";
@@ -40,17 +40,22 @@ export default function Dashboard() {
   const now = useNow(1000 * 10);
 
   const board = useQuery(api.pharma.list);
+  const syncCoverage = useAction(api.universe.sync);
   const { isRefreshing, error, refreshNow } = useLiveQuotes(isAuthenticated);
 
   const [search, setSearch] = useState("");
   const [sector, setSector] = useState<string>(SECTORS[0]);
   const [sortKey, setSortKey] = useState<SortKey>("change-desc");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const open = marketState(new Date(now)) === "open";
   const companies = useMemo(() => board?.companies ?? [], [board]);
   const summary = summarize(companies);
   const rollups = useMemo(() => rollUpBySector(companies), [companies]);
   const quotesUpdatedAt = board?.quotesUpdatedAt ?? null;
+  const coverage = board?.coverage ?? null;
+  const synced = board?.rosterSource === "nse-master";
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -71,6 +76,45 @@ export default function Dashboard() {
     await signOut();
     navigate("/");
   };
+
+  /**
+   * Re-reads the exchange's equity master and rebuilds the roster from it.
+   * Deliberately out of the twenty-second quote loop — a sweep downloads a
+   * whole listed-company file — but it runs once by itself on the first visit,
+   * so the desk starts at full width instead of at the curated seed.
+   */
+  const handleSyncCoverage = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const result = await syncCoverage({});
+      setSyncMessage(
+        result.ok
+          ? `Master swept: ${result.matched} keyword matches among ${result.equityListings} NSE listings — ${result.added} added, ${result.retired} retired, ${result.rejected} set aside by industry.`
+          : `Sweep failed: ${result.error ?? "the NSE equity master was unreachable"}.`,
+      );
+    } catch (err) {
+      setSyncMessage(
+        err instanceof Error && err.message
+          ? err.message
+          : "The coverage sweep could not be completed.",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, syncCoverage]);
+
+  // The desk should not sit on the seed list just because nobody pressed a
+  // button. A failed sweep still records a coverage row, so this runs at most
+  // once and never loops.
+  const autoSynced = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || autoSynced.current || board === undefined) return;
+    if (board.coverage) return;
+    autoSynced.current = true;
+    void handleSyncCoverage();
+  }, [board, handleSyncCoverage, isAuthenticated]);
 
   return (
     <div className="texture-grid bg-background text-foreground min-h-screen">
@@ -134,8 +178,56 @@ export default function Dashboard() {
               <RotateCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
               {isRefreshing ? "Reading" : "Refresh"}
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void handleSyncCoverage()}
+              disabled={isSyncing}
+              className="rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
+            >
+              <Database className={cn("size-3.5", isSyncing && "animate-pulse")} />
+              {isSyncing ? "Sweeping" : "Sync coverage"}
+            </Button>
           </div>
         </div>
+
+        {/* Coverage -------------------------------------------------------- */}
+        <div className="border-primary/50 text-muted-foreground mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-l-2 pl-4 font-mono text-[0.7rem] leading-6">
+          <span className="label-sm text-foreground">coverage</span>
+          <span aria-hidden="true">·</span>
+          <span>{synced ? "auto-synced from the NSE equity master" : "curated seed roster"}</span>
+          {coverage && coverage.ok ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                {coverage.matched} keyword matches among {coverage.equityListings} NSE listings
+              </span>
+              {coverage.rejected > 0 ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title="Names whose registered name reads as pharmaceutical but whose quoted industry is not — agrochemicals, speciality chemicals, animal feed.">
+                    {coverage.rejected} set aside by industry
+                  </span>
+                </>
+              ) : null}
+            </>
+          ) : null}
+          <span aria-hidden="true">·</span>
+          <span>{coverage ? `swept ${formatClock(coverage.updatedAt)}` : "never swept"}</span>
+          {coverage && !coverage.ok ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="text-loss">last sweep failed</span>
+            </>
+          ) : null}
+        </div>
+
+        {syncMessage ? (
+          <p className="text-muted-foreground mt-2 pl-4 font-mono text-[0.7rem] leading-6">
+            {syncMessage}
+          </p>
+        ) : null}
 
         {error ? (
           <div className="border-loss/50 bg-loss/5 mt-5 flex items-start gap-3 border-l-2 px-4 py-3">
@@ -149,7 +241,11 @@ export default function Dashboard() {
 
         {/* Breadth -------------------------------------------------------- */}
         <section className="border-border mt-8 grid gap-px border bg-border sm:grid-cols-2 lg:grid-cols-4">
-          <Tile label="names covered" value={String(companies.length)} note="nse pharma listings" />
+          <Tile
+            label="names covered"
+            value={String(companies.length)}
+            note={synced ? "auto-synced nse listings" : "curated seed roster"}
+          />
           <Tile
             label="advancing"
             value={String(summary.advancing)}
@@ -302,8 +398,11 @@ export default function Dashboard() {
           <p>
             <span className="text-foreground">note:</span> levels are indicative and may be delayed
             outside NSE cash-market hours (09:15–15:30 IST, Monday to Friday, holidays excepted).
-            Roster scope is NSE-listed pharmaceutical manufacturers — hospital, diagnostic-lab and
-            medical-device listings are not tracked. Personal reference only — not investment advice.
+            Coverage is swept from NSE's own equity master file and then filed by desk with a
+            keyword classifier, so an unusual registered name can slip through in either direction
+            — re-run Sync coverage to re-read the master. Scope is pharmaceutical manufacturers;
+            hospital, diagnostic-lab and medical-device listings are not tracked. Personal
+            reference only — not investment advice.
           </p>
         </footer>
       </motion.main>

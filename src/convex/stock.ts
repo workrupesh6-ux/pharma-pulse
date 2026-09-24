@@ -1,6 +1,34 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
-import { PHARMA_COMPANIES } from "./pharmaData";
+import { internalMutation, query, type QueryCtx } from "./_generated/server";
+import { PHARMA_COMPANIES, type PharmaSector } from "./pharmaData";
+
+/**
+ * Resolves one ticker against the desk's roster: the synced NSE universe when
+ * it exists, the curated seed otherwise. A row that the sync has retired is
+ * gone for good, so a delisted ticker stops opening a page.
+ */
+async function resolveCompany(
+  ctx: QueryCtx,
+  symbol: string,
+): Promise<{ symbol: string; name: string; sector: PharmaSector } | null> {
+  const wanted = symbol.trim().toUpperCase();
+
+  const stored = await ctx.db
+    .query("pharmaUniverse")
+    .withIndex("by_symbol", (q) => q.eq("symbol", wanted))
+    .unique();
+
+  if (stored) {
+    return stored.active
+      ? { symbol: stored.symbol, name: stored.name, sector: stored.sector }
+      : null;
+  }
+
+  const seed = PHARMA_COMPANIES.find((entry) => entry.symbol === wanted);
+  return seed
+    ? { symbol: seed.symbol, name: seed.name, sector: seed.sector }
+    : null;
+}
 
 /**
  * Everything the detail page needs for one ticker: the roster entry, its cached
@@ -12,9 +40,7 @@ import { PHARMA_COMPANIES } from "./pharmaData";
 export const detail = query({
   args: { symbol: v.string() },
   handler: async (ctx, { symbol }) => {
-    const company = PHARMA_COMPANIES.find(
-      (entry) => entry.symbol === symbol.trim().toUpperCase(),
-    );
+    const company = await resolveCompany(ctx, symbol);
     if (!company) return null;
 
     const [quote, fundamentals, news, brief] = await Promise.all([

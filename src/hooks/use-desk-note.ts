@@ -35,9 +35,11 @@ export function useDeskNote({
       if (!enabled || !symbol || inFlight.current) return;
 
       if (!force) {
-        if (!note.updatedAt) {
+        if (note.updatedAt === null) {
+          // Nothing on file yet, or the row was cleared — write the first note.
+        } else if (note.hasError && !note.hasBody) {
           // A failed attempt is already on file: wait before trying again.
-          if (note.hasError && Date.now() - note.updatedAt < RETRY_AFTER_FAILURE_MS) return;
+          if (Date.now() - note.updatedAt < RETRY_AFTER_FAILURE_MS) return;
         } else if (note.hasBody && Date.now() - note.updatedAt < NOTE_TTL_MS) {
           return;
         }

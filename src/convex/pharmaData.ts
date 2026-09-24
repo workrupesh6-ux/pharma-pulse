@@ -1,16 +1,21 @@
 /**
- * The pharma desk's coverage list — every NSE-listed pharmaceutical company
- * that the desk tracks, with the NSE trading symbol (no exchange suffix).
+ * The pharma desk's seed roster: the NSE-listed pharmaceutical companies the
+ * desk tracked before coverage became automatic, with their trading symbol (no
+ * exchange suffix).
  *
- * How the list is built: symbols are taken from NSE's own equity master file
- * (the official list of equity-series listings) and kept only where the
- * company actually manufactures pharmaceuticals, bulk drugs, biologics or
- * ayurvedic products. Each symbol is verified to return a live NSE quote
- * before it lands here, so a delisted or renamed ticker never reaches the
- * board. Hospital, diagnostic-lab and medical-device listings are out of
- * scope — this desk follows pharma manufacturers.
+ * These names are authoritative in two ways. They are always carried onto the
+ * roster by the coverage sync (src/convex/universe.ts), even when their
+ * registered names contain no pharmaceutical keyword for the classifier to
+ * find, and their desk assignment below is never overridden. The auto-synced
+ * universe in the `pharmaUniverse` table sits on top of this list; whenever
+ * that table is empty — before the first sync — this list is the whole board.
  *
- * This is plain data shared by the quote action and the reading board query.
+ * Scope is unchanged: pharmaceutical manufacturers, including bulk-drug and
+ * biologics makers and ayurvedic houses. Hospital, diagnostic-lab and
+ * medical-device listings stay out.
+ *
+ * This is plain data shared by the coverage sync, the quote action and the
+ * reading board query.
  */
 export const PHARMA_SECTORS = [
   "Formulations",

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { action } from "./_generated/server";
-import { PHARMA_COMPANIES } from "./pharmaData";
+import { action, type ActionCtx } from "./_generated/server";
+import type { PharmaSector } from "./pharmaData";
 
 /**
  * On-demand research for a single ticker.
@@ -49,10 +49,20 @@ async function fetchWithTimeout(url: string, accept: string, ms: number): Promis
   }
 }
 
-function resolveCompany(symbol: string) {
-  const company = PHARMA_COMPANIES.find(
-    (entry) => entry.symbol === symbol.trim().toUpperCase(),
+/**
+ * Looks a ticker up on the live roster — the synced NSE universe, or the
+ * curated seed before the first sync.
+ */
+async function resolveCompany(
+  ctx: ActionCtx,
+  symbol: string,
+): Promise<{ symbol: string; name: string; sector: PharmaSector }> {
+  const wanted = symbol.trim().toUpperCase();
+  const roster: { symbol: string; name: string; sector: PharmaSector }[] = await ctx.runQuery(
+    internal.pharma.roster,
+    {},
   );
+  const company = roster.find((entry) => entry.symbol === wanted);
   if (!company) throw new Error(`Unknown ticker: ${symbol}`);
   return company;
 }
@@ -142,22 +152,30 @@ async function fetchClassification(
   symbol: string,
 ): Promise<{ industry?: string; officialName?: string }> {
   try {
+    // Pinned to the NSE ticker: a bare symbol search collides with unrelated
+    // foreign listings (KPL, PAR and SPARC all resolve to US companies), which
+    // would print the wrong industry on the detail page.
+    const ticker = `${symbol}.NS`;
     const response = await fetchWithTimeout(
-      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&quotesCount=1&newsCount=0`,
+      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=8&newsCount=0`,
       "application/json",
       9000,
     );
     if (!response.ok) return {};
 
     const body = (await response.json()) as {
-      quotes?: Array<{ industry?: unknown; longname?: unknown }>;
+      quotes?: Array<{ symbol?: unknown; industry?: unknown; longname?: unknown }>;
     };
-    const first = body.quotes?.[0];
-    if (!first) return {};
+    const quote = (body.quotes ?? []).find(
+      (entry) =>
+        typeof entry.symbol === "string" &&
+        entry.symbol.toLowerCase() === ticker.toLowerCase(),
+    );
+    if (!quote) return {};
 
     return {
-      industry: typeof first.industry === "string" ? first.industry : undefined,
-      officialName: typeof first.longname === "string" ? first.longname : undefined,
+      industry: typeof quote.industry === "string" ? quote.industry : undefined,
+      officialName: typeof quote.longname === "string" ? quote.longname : undefined,
     };
   } catch {
     return {};
@@ -170,7 +188,7 @@ export const refreshFundamentals = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Sign in to load key fundamentals.");
 
-    const company = resolveCompany(symbol);
+    const company = await resolveCompany(ctx, symbol);
     const updatedAt = Date.now();
     const [chart, classification] = await Promise.all([
       fetchYearChart(company.symbol),
@@ -355,7 +373,7 @@ export const refreshNews = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Sign in to load headlines.");
 
-    const company = resolveCompany(symbol);
+    const company = await resolveCompany(ctx, symbol);
     const updatedAt = Date.now();
     const query = `${company.name} share`;
 

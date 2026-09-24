@@ -1,6 +1,12 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  query,
+  type QueryCtx,
+} from "./_generated/server";
 import { PHARMA_COMPANIES } from "./pharmaData";
+import type { PharmaSector } from "./pharmaData";
 
 /**
  * A cached live quote. Every field except `symbol` and `updatedAt` is optional
@@ -21,19 +27,81 @@ const quoteValidator = v.object({
   error: v.optional(v.string()),
 });
 
+export type RosterEntry = {
+  symbol: string;
+  name: string;
+  sector: PharmaSector;
+};
+
+/**
+ * The desks's roster: the synced NSE universe when one exists, otherwise the
+ * curated seed list. Every reader and writer goes through here, so the quote
+ * action, the detail page and the board can never disagree about who is on the
+ * board.
+ */
+async function loadRoster(ctx: QueryCtx): Promise<RosterEntry[]> {
+  const stored = await ctx.db.query("pharmaUniverse").collect();
+  const active = stored.filter((row) => row.active);
+
+  if (active.length > 0) {
+    return active.map((row) => ({
+      symbol: row.symbol,
+      name: row.name,
+      sector: row.sector,
+    }));
+  }
+
+  return PHARMA_COMPANIES.map((company) => ({
+    symbol: company.symbol,
+    name: company.name,
+    sector: company.sector,
+  }));
+}
+
+/** The roster as the actions see it. */
+export const roster = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<RosterEntry[]> => loadRoster(ctx),
+});
+
+/** The most recent coverage sweep, or null before the first one. */
+async function loadCoverage(ctx: QueryCtx) {
+  const row = await ctx.db.query("pharmaCoverage").order("desc").first();
+  if (!row) return null;
+
+  return {
+    listingsScanned: row.listingsScanned,
+    equityListings: row.equityListings,
+    matched: row.matched,
+    rejected: row.rejected ?? 0,
+    seeded: row.seeded,
+    discovered: row.discovered,
+    added: row.added,
+    retired: row.retired,
+    ok: row.ok,
+    error: row.error ?? null,
+    updatedAt: row.updatedAt,
+  };
+}
+
 /**
  * The board: every covered company, joined with its most recent cached quote.
  *
- * Reactive — whenever the quote action writes new prices, subscribed readers
- * re-render with the fresh tape.
+ * Reactive — whenever the quote action writes new prices or the coverage sync
+ * swaps the roster, subscribed readers re-render with the fresh tape.
  */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const cached = await ctx.db.query("pharmaQuotes").collect();
+    const [roster, cached, coverage] = await Promise.all([
+      loadRoster(ctx),
+      ctx.db.query("pharmaQuotes").collect(),
+      loadCoverage(ctx),
+    ]);
+
     const bySymbol = new Map(cached.map((row) => [row.symbol, row]));
 
-    const companies = PHARMA_COMPANIES.map((company) => {
+    const companies = roster.map((company) => {
       const quote = bySymbol.get(company.symbol);
       return {
         symbol: company.symbol,
@@ -59,7 +127,13 @@ export const list = query({
       }
     }
 
-    return { companies, quotesUpdatedAt };
+    return {
+      companies,
+      quotesUpdatedAt,
+      coverage,
+      /** `seed` until a coverage sync has populated the roster table. */
+      rosterSource: coverage ? ("nse-master" as const) : ("seed" as const),
+    };
   },
 });
 
@@ -75,20 +149,31 @@ export const list = query({
 export const stalestSymbols = internalQuery({
   args: { limit: v.number() },
   handler: async (ctx, { limit }) => {
-    const cached = await ctx.db.query("pharmaQuotes").collect();
+    const [roster, cached] = await Promise.all([
+      loadRoster(ctx),
+      ctx.db.query("pharmaQuotes").collect(),
+    ]);
+
     const lastRead = new Map(cached.map((row) => [row.symbol, row.updatedAt]));
 
-    return PHARMA_COMPANIES.map((company) => ({
-      symbol: company.symbol,
-      updatedAt: lastRead.get(company.symbol) ?? Number.NEGATIVE_INFINITY,
-    }))
+    return roster
+      .map((company) => ({
+        symbol: company.symbol,
+        updatedAt: lastRead.get(company.symbol) ?? Number.NEGATIVE_INFINITY,
+      }))
       .sort((a, b) => a.updatedAt - b.updatedAt)
       .slice(0, limit)
       .map((entry) => ({ symbol: entry.symbol }));
   },
 });
 
-/** Writes a batch of freshly fetched quotes, patching existing rows in place. */
+/**
+ * Writes a batch of freshly fetched quotes, patching existing rows in place.
+ *
+ * A quote that came back with a real price also stamps the roster row, which is
+ * how a newly discovered symbol earns its place: the master file says it is
+ * listed, the feed says it is tradable.
+ */
 export const upsertQuotes = internalMutation({
   args: { quotes: v.array(quoteValidator) },
   handler: async (ctx, { quotes }) => {
@@ -102,6 +187,17 @@ export const upsertQuotes = internalMutation({
         await ctx.db.patch(existing._id, quote);
       } else {
         await ctx.db.insert("pharmaQuotes", quote);
+      }
+
+      if (!quote.error) {
+        const row = await ctx.db
+          .query("pharmaUniverse")
+          .withIndex("by_symbol", (q) => q.eq("symbol", quote.symbol))
+          .unique();
+
+        if (row) {
+          await ctx.db.patch(row._id, { verifiedAt: quote.updatedAt, active: true });
+        }
       }
     }
   },

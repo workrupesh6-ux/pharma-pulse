@@ -1,6 +1,21 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
+import { PHARMA_SECTORS } from "./pharmaData";
+
+/**
+ * The five desks a company can be filed under. Built from the roster's own
+ * list so a new desk can never be added in one place and forgotten here.
+ */
+export const pharmaSectorValidator = v.union(
+  v.literal(PHARMA_SECTORS[0]),
+  v.literal(PHARMA_SECTORS[1]),
+  v.literal(PHARMA_SECTORS[2]),
+  v.literal(PHARMA_SECTORS[3]),
+  v.literal(PHARMA_SECTORS[4]),
+);
+
+export const pharmaSourceValidator = v.union(v.literal("seed"), v.literal("nse-master"));
 
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
@@ -32,9 +47,60 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
+    // The desk's coverage roster.
+    //
+    // Populated by the NSE equity-master sync (src/convex/universe.ts). The
+    // curated list in src/convex/pharmaData.ts is the seed — it is always kept,
+    // and it is the fallback whenever this table is empty, so the board works
+    // before the first sync has ever run.
+    pharmaUniverse: defineTable({
+      symbol: v.string(),
+      name: v.string(),
+      sector: pharmaSectorValidator,
+      /** Whether the row came from the curated seed or the NSE master file. */
+      source: pharmaSourceValidator,
+      isin: v.optional(v.string()),
+      /** Listing date from the master file, epoch ms. */
+      listedAt: v.optional(v.number()),
+      /**
+       * The quote feed's industry label, recorded when the name was judged.
+       * Its presence is also the memo that says "do not look this one up again".
+       */
+      industry: v.optional(v.string()),
+      /** Set once the quote feed has returned a real price for this symbol. */
+      verifiedAt: v.optional(v.number()),
+      /** False once a symbol no longer appears in the master file. */
+      active: v.boolean(),
+      updatedAt: v.number(),
+    })
+      .index("by_symbol", ["symbol"])
+      .index("by_active", ["active"]),
+
+    // One row per coverage sync, so the board can print how wide the sweep was
+    // and whether the last attempt failed.
+    pharmaCoverage: defineTable({
+      /** Every row in the NSE equity master that was read. */
+      listingsScanned: v.number(),
+      /** Of those, the equity-series (EQ and BE) listings. */
+      equityListings: v.number(),
+      /** Listings whose registered name carried a pharmaceutical keyword. */
+      matched: v.number(),
+      /** Of those, the names the industry check set aside as not drug makers. */
+      rejected: v.number(),
+      /** Curated seed names carried onto the roster. */
+      seeded: v.number(),
+      /** Matched names that were not already on the seed list. */
+      discovered: v.number(),
+      added: v.number(),
+      retired: v.number(),
+      ok: v.boolean(),
+      error: v.optional(v.string()),
+      updatedAt: v.number(),
+    }),
+
     // Latest cached live quote per NSE-listed pharma company. The roster of
-    // companies lives in code (src/convex/pharmaData.ts); this table only
-    // stores the price tape fetched by the quote action.
+    // companies lives in pharmaUniverse above; this table only stores the price
+    // tape fetched by the quote action.
     pharmaQuotes: defineTable({
       symbol: v.string(),
       price: v.optional(v.number()),

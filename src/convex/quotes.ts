@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { PHARMA_COMPANIES } from "./pharmaData";
 
 /**
  * Live quote source.
@@ -147,14 +146,18 @@ export const refresh = action({
       throw new Error("Sign in to refresh live market prices.");
     }
 
+    // The roster is whatever the coverage sync last published, falling back to
+    // the curated seed until the first sweep has run.
+    const roster = await ctx.runQuery(internal.pharma.roster, {});
     const wanted = symbols?.map((symbol) => symbol.trim().toUpperCase());
     const targets =
       wanted && wanted.length > 0
-        ? PHARMA_COMPANIES.filter((company) => wanted.includes(company.symbol))
+        ? roster.filter((company) => wanted.includes(company.symbol))
         : (
             await ctx.runQuery(internal.pharma.stalestSymbols, { limit: REFRESH_WINDOW })
-          ).map((entry) => PHARMA_COMPANIES.find((company) => company.symbol === entry.symbol))
-            .filter((company): company is (typeof PHARMA_COMPANIES)[number] => company !== undefined);
+          )
+            .map((entry) => roster.find((company) => company.symbol === entry.symbol))
+            .filter((company) => company !== undefined);
 
     const quotes: Quote[] = [];
 
