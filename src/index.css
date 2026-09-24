@@ -1,0 +1,250 @@
+/* DO NOT CHANGE */
+@import "tailwindcss";
+@import "tw-animate-css";
+@custom-variant dark (&:is(.dark *));
+
+/* DO NOT CHANGE */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* --- Newspaper theme extensions --- */
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-gain-bright: var(--gain-bright);
+  --color-loss-bright: var(--loss-bright);
+  --color-paper: var(--background);
+  --color-ink: var(--foreground);
+  --color-rule: var(--border);
+  --font-masthead: "Playfair Display", "Times New Roman", Times, Georgia, serif;
+  --font-serif: "Newsreader", Georgia, "Times New Roman", Times, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* CHANGE VALUES FOR THEME */
+/* Morning edition — warm newsprint stock with dense black ink. */
+:root {
+  --radius: 0.125rem;
+  --background: oklch(0.966 0.011 87);
+  --foreground: oklch(0.213 0.013 55);
+  --card: oklch(0.987 0.007 88);
+  --card-foreground: oklch(0.213 0.013 55);
+  --popover: oklch(0.991 0.006 88);
+  --popover-foreground: oklch(0.213 0.013 55);
+  --primary: oklch(0.435 0.155 27);
+  --primary-foreground: oklch(0.975 0.009 88);
+  --secondary: oklch(0.925 0.011 85);
+  --secondary-foreground: oklch(0.213 0.013 55);
+  --muted: oklch(0.932 0.011 85);
+  --muted-foreground: oklch(0.468 0.016 60);
+  --accent: oklch(0.915 0.015 84);
+  --accent-foreground: oklch(0.213 0.013 55);
+  --destructive: oklch(0.505 0.181 27);
+  --border: oklch(0.845 0.013 82);
+  --input: oklch(0.845 0.013 82);
+  --ring: oklch(0.435 0.155 27);
+  --chart-1: oklch(0.435 0.155 27);
+  --chart-2: oklch(0.455 0.105 155);
+  --chart-3: oklch(0.398 0.058 240);
+  --chart-4: oklch(0.62 0.12 68);
+  --chart-5: oklch(0.35 0.02 60);
+  --sidebar: oklch(0.955 0.011 86);
+  --sidebar-foreground: oklch(0.213 0.013 55);
+  --sidebar-primary: oklch(0.435 0.155 27);
+  --sidebar-primary-foreground: oklch(0.975 0.009 88);
+  --sidebar-accent: oklch(0.915 0.015 84);
+  --sidebar-accent-foreground: oklch(0.213 0.013 55);
+  --sidebar-border: oklch(0.845 0.013 82);
+  --sidebar-ring: oklch(0.435 0.155 27);
+
+  --gain: oklch(0.452 0.104 155);
+  --loss: oklch(0.505 0.181 27);
+  /* Versions tuned to stay legible on the inverted (ink) tape band. */
+  --gain-bright: oklch(0.808 0.152 155);
+  --loss-bright: oklch(0.762 0.163 27);
+}
+
+/* Night edition — the same gazette printed on charcoal. */
+.dark {
+  --background: oklch(0.187 0.009 70);
+  --foreground: oklch(0.936 0.011 86);
+  --card: oklch(0.225 0.009 70);
+  --card-foreground: oklch(0.936 0.011 86);
+  --popover: oklch(0.235 0.009 70);
+  --popover-foreground: oklch(0.936 0.011 86);
+  --primary: oklch(0.638 0.161 27);
+  --primary-foreground: oklch(0.187 0.009 70);
+  --secondary: oklch(0.272 0.009 70);
+  --secondary-foreground: oklch(0.936 0.011 86);
+  --muted: oklch(0.272 0.009 70);
+  --muted-foreground: oklch(0.712 0.012 80);
+  --accent: oklch(0.298 0.011 70);
+  --accent-foreground: oklch(0.936 0.011 86);
+  --destructive: oklch(0.682 0.171 27);
+  --border: oklch(0.99 0.01 85 / 16%);
+  --input: oklch(0.99 0.01 85 / 20%);
+  --ring: oklch(0.638 0.161 27);
+  --chart-1: oklch(0.638 0.161 27);
+  --chart-2: oklch(0.712 0.128 155);
+  --chart-3: oklch(0.66 0.09 240);
+  --chart-4: oklch(0.769 0.13 70);
+  --chart-5: oklch(0.82 0.02 85);
+  --sidebar: oklch(0.216 0.009 70);
+  --sidebar-foreground: oklch(0.936 0.011 86);
+  --sidebar-primary: oklch(0.638 0.161 27);
+  --sidebar-primary-foreground: oklch(0.187 0.009 70);
+  --sidebar-accent: oklch(0.298 0.011 70);
+  --sidebar-accent-foreground: oklch(0.936 0.011 86);
+  --sidebar-border: oklch(0.99 0.01 85 / 16%);
+  --sidebar-ring: oklch(0.638 0.161 27);
+
+  --gain: oklch(0.722 0.128 155);
+  --loss: oklch(0.682 0.171 27);
+  --gain-bright: oklch(0.808 0.152 155);
+  --loss-bright: oklch(0.762 0.163 27);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-serif antialiased;
+    font-optical-sizing: auto;
+  }
+  button:not([disabled]),
+  [role="button"]:not([disabled]) {
+    cursor: pointer;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Newspaper utilities
+   --------------------------------------------------------------------------- */
+@layer utilities {
+  /* Faint press grain so panels read as paper rather than flat pixels. */
+  .texture-newsprint {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)' opacity='0.055'/%3E%3C/svg%3E");
+  }
+
+  /* Print-style rules. */
+  .rule-double {
+    border-top: 3px solid var(--foreground);
+    border-bottom: 1px solid var(--foreground);
+  }
+  .rule-hair {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Small-caps section label above a headline. */
+  .kicker {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.625rem;
+    line-height: 1;
+    font-weight: 600;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Drop cap for the lead paragraph. */
+  .drop-cap::first-letter {
+    float: left;
+    font-family: var(--font-masthead);
+    font-weight: 800;
+    font-size: 3.6rem;
+    line-height: 0.82;
+    padding-right: 0.5rem;
+    padding-top: 0.35rem;
+  }
+
+  /* Continuous market ticker. Track is duplicated, so -50% loops seamlessly. */
+  .animate-ticker {
+    animation: ticker-scroll 72s linear infinite;
+  }
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
+  .animate-blink {
+    animation: live-blink 2.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-ticker,
+    .animate-blink {
+      animation: none;
+    }
+  }
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* Quiet, print-like scrollbars. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 2px solid var(--muted);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
