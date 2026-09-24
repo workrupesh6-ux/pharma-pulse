@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { PHARMA_COMPANIES } from "./pharmaData";
 
 /**
@@ -60,6 +60,31 @@ export const list = query({
     }
 
     return { companies, quotesUpdatedAt };
+  },
+});
+
+/**
+ * The next slice of the roster to re-read.
+ *
+ * The desk covers every listed pharma name, so no single pass can re-quote the
+ * whole shelf inside one action without holding the connection open far too
+ * long. Instead the caller asks for the stalest `limit` symbols — never-quoted
+ * names first, then the oldest reads — so successive cycles sweep the entire
+ * board and a single slow ticker can never starve the rest.
+ */
+export const stalestSymbols = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, { limit }) => {
+    const cached = await ctx.db.query("pharmaQuotes").collect();
+    const lastRead = new Map(cached.map((row) => [row.symbol, row.updatedAt]));
+
+    return PHARMA_COMPANIES.map((company) => ({
+      symbol: company.symbol,
+      updatedAt: lastRead.get(company.symbol) ?? Number.NEGATIVE_INFINITY,
+    }))
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+      .slice(0, limit)
+      .map((entry) => ({ symbol: entry.symbol }));
   },
 });
 

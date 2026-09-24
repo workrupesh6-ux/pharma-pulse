@@ -57,7 +57,7 @@ export default function Landing() {
 
   const statusRows: { key: string; value: ReactNode }[] = [
     { key: "roster", value: `${companies.length} companies` },
-    { key: "desks", value: `${PHARMA_SECTORS.length} · formulations, api & cdmo, mnc, biologics` },
+    { key: "desks", value: `${PHARMA_SECTORS.length} · ${PHARMA_SECTORS.join(", ").toLowerCase()}` },
     { key: "feed", value: "live · national stock exchange" },
     {
       key: "last read",
@@ -135,9 +135,10 @@ export default function Landing() {
               A watchdog for the entire NSE pharma shelf.
             </h2>
             <p className="text-muted-foreground mt-5 max-w-xl text-sm leading-7">
-              Forty-two pharmaceutical companies trade on the National Stock Exchange. NSE Watchdog
-              keeps all of them in one searchable console — live prices, key fundamentals and recent
-              headlines — so the sector can be read in a single pass instead of a dozen browser tabs.
+              Every NSE-listed pharmaceutical manufacturer on the desk roster — formulations, bulk
+              drugs and CDMO, multinational subsidiaries, biologics and ayurvedic — tracked in one
+              searchable console with live prices, key fundamentals and recent headlines. The sector
+              reads in a single pass instead of a dozen browser tabs.
             </p>
             <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-7">
               No watchlists to build and no symbols to paste. It is built for one user, and that user
@@ -239,7 +240,7 @@ export default function Landing() {
         <section id="coverage" className="border-border border-t py-12">
           <div className="border-border flex flex-wrap items-baseline justify-between gap-3 border-b pb-3">
             <h3 className="font-mono text-lg font-semibold tracking-[0.08em]">
-              Coverage — every listed name
+              Coverage — every listed pharma name
             </h3>
             <span className="label-sm text-muted-foreground">
               {companies.length} nse pharmaceutical listings
@@ -305,12 +306,10 @@ export default function Landing() {
           <p className="label text-primary">ready when you are</p>
           <h3 className="mt-4 max-w-2xl font-mono text-2xl leading-snug font-semibold tracking-[0.04em] sm:text-3xl">
             Sign in and the tape starts running immediately.
-          </h3>
-          <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-7">
-            Live prices, key fundamentals and recent headlines for all{" "}
-            {companies.length > 0 ? companies.length : 42} covered companies. Guest access is
-            available if you would rather look around first.
-          </p>
+          </h3>            <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-7">
+              Live prices, key fundamentals and recent headlines for every covered company. Guest
+              access is available if you would rather look around first.
+            </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Button
               asChild
@@ -336,11 +335,12 @@ export default function Landing() {
         <footer className="border-border text-muted-foreground border-t py-6 font-mono text-[0.7rem] leading-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <p className="max-w-3xl">
-              <span className="text-foreground">method:</span> symbols are the NSE tickers for the
-              covered companies. Prices, fundamentals and headlines come from public NSE-listed
-              market and newswire feeds, refreshed on a timer while the console is open. Levels are
-              indicative, may be delayed outside market hours, and are published for personal
-              reference only.
+              <span className="text-foreground">method:</span> the roster is built from NSE's own
+              equity master list and kept to pharmaceutical manufacturers — hospital, diagnostic and
+              device listings are deliberately out of scope. Prices, fundamentals and headlines come
+              from public NSE-listed market and newswire feeds, refreshed on a timer while the
+              console is open. Levels are indicative, may be delayed outside market hours, and are
+              published for personal reference only.
             </p>
             <p className="label-sm">not investment advice</p>
           </div>

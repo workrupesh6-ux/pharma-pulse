@@ -82,6 +82,19 @@ const schema = defineSchema(
       updatedAt: v.number(),
       error: v.optional(v.string()),
     }).index("by_symbol", ["symbol"]),
+
+    // The desk note: a short Claude-written read of one company's own quote,
+    // fundamentals and headlines. Written on demand and cached, so a page view
+    // never costs a model call unless the note is missing or stale.
+    pharmaBriefs: defineTable({
+      symbol: v.string(),
+      /** Light markdown: paragraphs, "- " bullets and **bold** spans. */
+      body: v.string(),
+      /** Which model wrote it, printed beside the note. */
+      model: v.optional(v.string()),
+      updatedAt: v.number(),
+      error: v.optional(v.string()),
+    }).index("by_symbol", ["symbol"]),
   },
   {
     schemaValidation: false,

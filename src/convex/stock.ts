@@ -17,7 +17,7 @@ export const detail = query({
     );
     if (!company) return null;
 
-    const [quote, fundamentals, news] = await Promise.all([
+    const [quote, fundamentals, news, brief] = await Promise.all([
       ctx.db
         .query("pharmaQuotes")
         .withIndex("by_symbol", (q) => q.eq("symbol", company.symbol))
@@ -28,6 +28,10 @@ export const detail = query({
         .unique(),
       ctx.db
         .query("pharmaNews")
+        .withIndex("by_symbol", (q) => q.eq("symbol", company.symbol))
+        .unique(),
+      ctx.db
+        .query("pharmaBriefs")
         .withIndex("by_symbol", (q) => q.eq("symbol", company.symbol))
         .unique(),
     ]);
@@ -73,6 +77,14 @@ export const detail = query({
             provider: news.provider ?? null,
             updatedAt: news.updatedAt,
             error: news.error ?? null,
+          }
+        : null,
+      brief: brief
+        ? {
+            body: brief.body,
+            model: brief.model ?? null,
+            updatedAt: brief.updatedAt,
+            error: brief.error ?? null,
           }
         : null,
     };
@@ -131,5 +143,27 @@ export const upsertNews = internalMutation({
 
     if (existing) await ctx.db.patch(existing._id, args);
     else await ctx.db.insert("pharmaNews", { ...args, items: args.items ?? [] });
+  },
+});
+
+/** Stores the desk note. A failed write keeps the previous note on file. */
+export const upsertBrief = internalMutation({
+  args: {
+    symbol: v.string(),
+    body: v.optional(v.string()),
+    model: v.optional(v.string()),
+    updatedAt: v.number(),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pharmaBriefs")
+      .withIndex("by_symbol", (q) => q.eq("symbol", args.symbol))
+      .unique();
+
+    if (existing) await ctx.db.patch(existing._id, args);
+    else {
+      await ctx.db.insert("pharmaBriefs", { ...args, body: args.body ?? "" });
+    }
   },
 });

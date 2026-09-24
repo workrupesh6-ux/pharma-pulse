@@ -22,6 +22,13 @@ const QUOTE_HOSTS = [
 /** Keeps the number of simultaneous outbound requests small. */
 const BATCH_SIZE = 8;
 
+/**
+ * How many symbols one cycle re-reads. The board covers the whole listed
+ * pharma shelf, so successive cycles sweep the roster instead of hammering
+ * every name at once — a full pass lands in a couple of minutes.
+ */
+const REFRESH_WINDOW = 40;
+
 type Quote = {
   symbol: string;
   price?: number;
@@ -129,7 +136,8 @@ async function fetchQuote(symbol: string): Promise<Quote> {
  * Signed-in only: this makes outbound requests on the deployment's behalf, so it
  * should not be an open relay. The reading board itself stays public. Pass
  * `symbols` to refresh a single ticker — the detail page does this so one price
- * does not cost forty-two requests.
+ * does not cost the whole roster. With no symbols the action re-reads the
+ * stalest slice of the board, which cycles through every covered name.
  */
 export const refresh = action({
   args: { symbols: v.optional(v.array(v.string())) },
@@ -143,7 +151,10 @@ export const refresh = action({
     const targets =
       wanted && wanted.length > 0
         ? PHARMA_COMPANIES.filter((company) => wanted.includes(company.symbol))
-        : PHARMA_COMPANIES;
+        : (
+            await ctx.runQuery(internal.pharma.stalestSymbols, { limit: REFRESH_WINDOW })
+          ).map((entry) => PHARMA_COMPANIES.find((company) => company.symbol === entry.symbol))
+            .filter((company): company is (typeof PHARMA_COMPANIES)[number] => company !== undefined);
 
     const quotes: Quote[] = [];
 

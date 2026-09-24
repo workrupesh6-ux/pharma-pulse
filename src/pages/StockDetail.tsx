@@ -3,6 +3,7 @@ import { KeyValue, Panel, RangeMeter } from "@/components/watchdog/Panel";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useDeskNote } from "@/hooks/use-desk-note";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { useNow } from "@/hooks/use-now";
 import { useStockResearch } from "@/hooks/use-stock-research";
@@ -19,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { AlertTriangle, ArrowLeft, ExternalLink, RotateCw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ExternalLink, RotateCw, Sparkles } from "lucide-react";
 import { Link, useParams } from "react-router";
 
 const PRICE = "tabular font-mono";
@@ -47,6 +48,17 @@ export default function StockDetail() {
       hasError: Boolean(fundamentals?.error),
     },
     news: { updatedAt: news?.updatedAt ?? null, hasError: Boolean(news?.error) },
+  });
+
+  const brief = detail?.brief ?? null;
+  const deskNote = useDeskNote({
+    symbol,
+    enabled: isAuthenticated && detail !== null && detail !== undefined,
+    note: {
+      updatedAt: brief?.updatedAt ?? null,
+      hasBody: Boolean(brief?.body),
+      hasError: Boolean(brief?.error),
+    },
   });
 
   const open = marketState(new Date(now)) === "open";
@@ -326,6 +338,73 @@ export default function StockDetail() {
           </Panel>
         </div>
 
+        {/* Desk note ------------------------------------------------------- */}
+        <Panel
+          className="mt-6"
+          title="desk note · claude"
+          meta={
+            brief
+              ? [
+                  brief.model ?? "claude",
+                  `written ${formatRelative(brief.updatedAt, now)}`,
+                  deskNote.isWriting ? "rewriting…" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "not written yet"
+          }
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void deskNote.writeNote()}
+              disabled={deskNote.isWriting}
+              className="rounded-none font-mono text-[0.65rem] tracking-[0.1em] uppercase"
+            >
+              {deskNote.isWriting ? (
+                <RotateCw className="size-3 animate-spin" />
+              ) : (
+                <Sparkles className="size-3" />
+              )}
+              {brief?.body ? "Rewrite" : "Write"}
+            </Button>
+          }
+        >
+          {deskNote.error ? (
+            <div className="border-loss/50 bg-loss/5 mb-4 flex items-start gap-3 border-l-2 px-3 py-2.5">
+              <AlertTriangle className="text-loss mt-0.5 size-3.5 shrink-0" />
+              <p className="font-mono text-[0.7rem] leading-5">{deskNote.error}</p>
+            </div>
+          ) : null}
+
+          {brief?.body ? (
+            <NoteBody body={brief.body} />
+          ) : deskNote.isWriting ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="bg-muted h-3 animate-pulse"
+                  style={{ width: `${88 - index * 11}%` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground font-mono text-xs leading-6">
+              Claude reads this company&apos;s cached quote, fundamentals and headlines and writes a
+              short desk note from them — nothing it cannot see on this page. It is written once and
+              cached; use Rewrite to refresh it.
+            </p>
+          )}
+
+          {brief?.error && brief.body ? (
+            <p className="text-loss label-sm mt-4 border-t border-border pt-3">
+              last attempt failed: {brief.error}
+            </p>
+          ) : null}
+        </Panel>
+
         {/* Recent headlines ------------------------------------------------ */}
         <Panel
           className="mt-6"
@@ -404,8 +483,10 @@ export default function StockDetail() {
           <p>
             <span className="text-foreground">note:</span> fundamentals are derived from one year of
             real NSE price history; headlines are pulled from a public Indian news feed and link to
-            the original publishers. Levels are indicative and may be delayed outside market hours
-            (09:15–15:30 IST, Monday to Friday). Personal reference only — not investment advice.
+            the original publishers. The desk note is written by Claude from those same cached
+            numbers and headlines — it adds no outside data and is not investment advice. Levels are
+            indicative and may be delayed outside market hours (09:15–15:30 IST, Monday to Friday).
+            Personal reference only.
           </p>
         </footer>
       </motion.main>
@@ -441,6 +522,57 @@ function MiniStat({
         {prefix && value !== "—" ? `${prefix}${value}` : value}
       </p>
     </div>
+  );
+}
+
+/** Renders the note's light markdown: paragraphs, "- " bullets, **bold**. */
+function NoteBody({ body }: { body: string }) {
+  const blocks = body
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+        const isList = lines.every((line) => line.startsWith("- "));
+
+        if (isList) {
+          return (
+            <ul key={index} className="space-y-2">
+              {lines.map((line, lineIndex) => (
+                <li key={lineIndex} className="flex gap-2.5 text-sm leading-6">
+                  <span className="text-primary mt-0.5 font-mono text-[0.7rem]">—</span>
+                  <span className="text-foreground/90">{inlineBold(line.slice(2))}</span>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={index} className="text-sm leading-6">
+            {inlineBold(lines.join(" "))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Splits a line on **bold** spans without pulling in a markdown library. */
+function inlineBold(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index} className="text-foreground font-semibold">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={index} className="text-foreground/80">
+        {part}
+      </span>
+    ),
   );
 }
 

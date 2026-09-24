@@ -113,8 +113,9 @@ export default function Dashboard() {
               Pharma Catalog
             </h1>
             <p className="text-muted-foreground mt-3 max-w-2xl font-mono text-xs leading-6">
-              Search, sort and open any covered pharmaceutical ticker. Prices are re-read every{" "}
-              {Math.round(REFRESH_INTERVAL_MS / 1000)} seconds while this page is open.
+              Search, sort and open any covered pharmaceutical ticker. Every{" "}
+              {Math.round(REFRESH_INTERVAL_MS / 1000)} seconds the desk re-reads the stalest slice of
+              the roster, so the whole shelf is refreshed continuously while this page is open.
             </p>
           </div>
 
@@ -191,7 +192,7 @@ export default function Dashboard() {
               breadth · avg move · best / worst · select to filter
             </span>
           </div>
-          <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {rollups.map((rollup) => (
               <DeskCard
                 key={rollup.sector}
@@ -255,7 +256,8 @@ export default function Dashboard() {
 
         {awaitingFirstTape ? (
           <p className="border-border text-muted-foreground mt-5 border-l-2 pl-4 font-mono text-xs">
-            First tape run in progress — prices appear here within a few seconds.
+            First tape run in progress — the roster is read in batches, so prices fill in over the
+            first minute or so.
           </p>
         ) : null}
 
@@ -300,7 +302,8 @@ export default function Dashboard() {
           <p>
             <span className="text-foreground">note:</span> levels are indicative and may be delayed
             outside NSE cash-market hours (09:15–15:30 IST, Monday to Friday, holidays excepted).
-            Personal reference only — not investment advice.
+            Roster scope is NSE-listed pharmaceutical manufacturers — hospital, diagnostic-lab and
+            medical-device listings are not tracked. Personal reference only — not investment advice.
           </p>
         </footer>
       </motion.main>
