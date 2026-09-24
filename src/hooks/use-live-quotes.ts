@@ -12,12 +12,15 @@ export const REFRESH_INTERVAL_MS = 20_000;
  * the fetch — new prices flow back to every subscribed reader automatically.
  * Polling pauses while the tab is hidden and resumes on focus.
  */
-export function useLiveQuotes(enabled: boolean) {
+export function useLiveQuotes(enabled: boolean, symbols?: string[]) {
   const refreshAction = useAction(api.quotes.refresh);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const inFlight = useRef(false);
+
+  // A stable string key keeps the callback identity from changing every render.
+  const symbolKey = symbols && symbols.length > 0 ? symbols.join(",") : "";
 
   const refreshNow = useCallback(async () => {
     if (inFlight.current) return;
@@ -26,7 +29,7 @@ export function useLiveQuotes(enabled: boolean) {
     inFlight.current = true;
     setIsRefreshing(true);
     try {
-      await refreshAction({});
+      await refreshAction(symbolKey ? { symbols: symbolKey.split(",") } : {});
       setError(null);
       setLastSyncedAt(Date.now());
     } catch (err) {
@@ -39,7 +42,7 @@ export function useLiveQuotes(enabled: boolean) {
       inFlight.current = false;
       setIsRefreshing(false);
     }
-  }, [refreshAction]);
+  }, [refreshAction, symbolKey]);
 
   useEffect(() => {
     if (!enabled) return;

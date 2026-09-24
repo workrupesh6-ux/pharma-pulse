@@ -49,6 +49,37 @@ const schema = defineSchema(
       updatedAt: v.number(),
       error: v.optional(v.string()),
     }).index("by_symbol", ["symbol"]),
+
+    // Key fundamentals per company, derived from a year of price history plus
+    // the feed's industry classification. Fetched on demand from the detail page.
+    pharmaFundamentals: defineTable({
+      symbol: v.string(),
+      officialName: v.optional(v.string()),
+      industry: v.optional(v.string()),
+      fiftyTwoWeekHigh: v.optional(v.number()),
+      fiftyTwoWeekLow: v.optional(v.number()),
+      oneYearChangePercent: v.optional(v.number()),
+      ytdChangePercent: v.optional(v.number()),
+      averageVolume30d: v.optional(v.number()),
+      series: v.optional(v.array(v.object({ t: v.number(), c: v.number() }))),
+      updatedAt: v.number(),
+      error: v.optional(v.string()),
+    }).index("by_symbol", ["symbol"]),
+
+    // Recent headlines per company, read from a public news feed.
+    pharmaNews: defineTable({
+      symbol: v.string(),
+      items: v.array(
+        v.object({
+          title: v.string(),
+          url: v.string(),
+          source: v.string(),
+          publishedAt: v.optional(v.number()),
+        }),
+      ),
+      updatedAt: v.number(),
+      error: v.optional(v.string()),
+    }).index("by_symbol", ["symbol"]),
   },
   {
     schemaValidation: false,

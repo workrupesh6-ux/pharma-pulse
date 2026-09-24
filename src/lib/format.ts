@@ -149,5 +149,36 @@ export function formatRelative(timestamp: number | null | undefined, now: number
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatShortDate(timestamp);
+}
+
+/** e.g. "24 Sep 2026" */
+export function formatShortDate(at: number | null | undefined): string {
+  if (!at) return EMPTY;
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: IST_TIME_ZONE,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(at));
+}
+
+/**
+ * Where a value sits inside a low–high band, as a 0–100 percentage.
+ * Returns null when the band is unusable so callers can print a dash.
+ */
+export function rangePosition(
+  low: number | null | undefined,
+  high: number | null | undefined,
+  value: number | null | undefined,
+): number | null {
+  if (low === null || low === undefined) return null;
+  if (high === null || high === undefined) return null;
+  if (value === null || value === undefined) return null;
+  if (high <= low) return null;
+  return Math.min(100, Math.max(0, ((value - low) / (high - low)) * 100));
 }

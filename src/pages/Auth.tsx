@@ -1,11 +1,11 @@
-import { Masthead } from "@/components/gazette/Masthead";
+import { AppHeader } from "@/components/watchdog/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
 import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -22,10 +22,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirect = resolveRedirectAfterAuth(
-    searchParams.get("returnTo"),
-    redirectAfterAuth,
-  );
+  const redirect = resolveRedirectAfterAuth(searchParams.get("returnTo"), redirectAfterAuth);
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -89,32 +86,35 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="texture-newsprint bg-background text-foreground min-h-screen">
-      <Masthead size="compact" date={new Date()} className="border-t-4" />
+    <div className="texture-grid bg-background text-foreground min-h-screen">
+      <AppHeader size="compact" />
 
-      <main className="mx-auto flex w-full max-w-[1400px] flex-col items-center px-4 py-10 sm:px-6">
-        <div className="w-full max-w-[420px]">
-          <div className="border-foreground bg-card border-2">
-            <div className="border-foreground border-b-2 px-5 py-2.5">
-              <p className="kicker text-center">Subscriber access</p>
+      <main className="mx-auto flex w-full max-w-[1500px] flex-col items-center px-4 py-12 sm:px-6">
+        <div className="w-full max-w-[440px]">
+          <div className="border-border bg-card/60 border">
+            <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
+              <p className="label text-foreground">watchdog access</p>
+              <p className="label-sm text-muted-foreground">
+                {step === "signIn" ? "step 1 / 2" : "step 2 / 2"}
+              </p>
             </div>
 
-            <div className="px-6 py-7">
+            <div className="px-5 py-6 sm:px-6 sm:py-7">
               {step === "signIn" ? (
                 <>
-                  <h1 className="font-masthead text-center text-3xl leading-tight font-black tracking-tight">
-                    Sign in to the tape
+                  <h1 className="font-mono text-xl font-semibold tracking-[0.06em]">
+                    Sign in to start the tape
                   </h1>
-                  <p className="text-muted-foreground mt-2 text-center font-serif text-sm leading-6 italic">
-                    Enter your email and we will send a six-digit code. New readers are enrolled on
-                    the spot.
+                  <p className="text-muted-foreground mt-3 text-xs leading-6">
+                    Enter your email and a six-digit code will be sent to it. New users are enrolled
+                    on the spot — there is no separate registration step.
                   </p>
 
                   <form onSubmit={handleEmailSubmit} className="mt-6">
-                    <label className="kicker text-muted-foreground" htmlFor="email">
-                      Email address
+                    <label className="label-sm text-muted-foreground" htmlFor="email">
+                      email address
                     </label>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2.5 flex items-center gap-2">
                       <div className="relative flex-1">
                         <Mail className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                         <Input
@@ -124,7 +124,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           placeholder="name@example.com"
                           required
                           disabled={isLoading}
-                          className="focus-visible:border-foreground h-11 rounded-none border pl-9 font-serif shadow-none"
+                          className="focus-visible:border-primary h-11 rounded-none border pl-9 font-mono text-xs shadow-none"
                         />
                       </div>
                       <Button
@@ -144,14 +144,16 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </div>
 
                     {error ? (
-                      <p className="text-destructive mt-3 font-serif text-sm">{error}</p>
+                      <p className="text-loss mt-3 font-mono text-xs">
+                        <span className="opacity-70">error:</span> {error}
+                      </p>
                     ) : null}
 
                     <div className="border-border mt-6 border-t pt-5">
                       <Button
                         type="button"
                         variant="outline"
-                        className="font-mono h-11 w-full rounded-none text-[0.68rem] tracking-[0.14em] uppercase"
+                        className="h-11 w-full rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
                         onClick={handleGuestLogin}
                         disabled={isLoading}
                       >
@@ -163,11 +165,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 </>
               ) : (
                 <>
-                  <h1 className="font-masthead text-center text-3xl leading-tight font-black tracking-tight">
-                    Check your post
+                  <h1 className="font-mono text-xl font-semibold tracking-[0.06em]">
+                    Enter the six-digit code
                   </h1>
-                  <p className="text-muted-foreground mt-2 text-center font-serif text-sm leading-6 italic">
-                    We sent a six-digit code to {step.email}
+                  <p className="text-muted-foreground mt-3 text-xs leading-6">
+                    Sent to <span className="text-foreground">{step.email}</span>. The code expires
+                    shortly, so enter it as soon as it arrives.
                   </p>
 
                   <form onSubmit={handleOtpSubmit} className="mt-6">
@@ -192,7 +195,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                             <InputOTPSlot
                               key={index}
                               index={index}
-                              className="border-foreground/40 size-11 rounded-none border-y border-r font-mono first:border-l"
+                              className="border-border size-11 rounded-none border-y border-r font-mono first:border-l"
                             />
                           ))}
                         </InputOTPGroup>
@@ -200,12 +203,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </div>
 
                     {error ? (
-                      <p className="text-destructive mt-3 text-center font-serif text-sm">{error}</p>
+                      <p className="text-loss mt-3 text-center font-mono text-xs">
+                        <span className="opacity-70">error:</span> {error}
+                      </p>
                     ) : null}
 
                     <Button
                       type="submit"
-                      className="font-mono mt-6 h-11 w-full rounded-none text-[0.68rem] tracking-[0.14em] uppercase"
+                      className="mt-6 h-11 w-full rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
                       disabled={isLoading || otp.length !== 6}
                     >
                       {isLoading ? (
@@ -225,7 +230,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       type="button"
                       onClick={() => setStep("signIn")}
                       disabled={isLoading}
-                      className="text-muted-foreground mt-4 w-full font-serif text-sm underline underline-offset-4 hover:text-foreground"
+                      className="text-muted-foreground hover:text-foreground mt-4 w-full font-mono text-xs underline underline-offset-4"
                     >
                       Use a different email
                     </button>
@@ -234,9 +239,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               )}
             </div>
 
-            <div className="border-border bg-muted border-t px-6 py-3 text-center">
-              <p className="text-muted-foreground font-mono text-[0.6rem] tracking-[0.14em] uppercase">
-                Secured by{" "}
+            <div className="border-border bg-muted/40 border-t px-4 py-3 text-center">
+              <p className="label-sm text-muted-foreground">
+                secured by{" "}
                 <a
                   href="https://freebuff.com"
                   target="_blank"
@@ -249,9 +254,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </div>
           </div>
 
-          <p className="text-muted-foreground mt-6 text-center font-serif text-sm">
+          <p className="text-muted-foreground mt-5 text-center font-mono text-xs">
             <Link to="/" className="hover:text-foreground underline underline-offset-4">
-              Back to the front page
+              ← Back to the front page
             </Link>
           </p>
         </div>

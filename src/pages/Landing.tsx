@@ -1,43 +1,52 @@
-import { MarketTape } from "@/components/gazette/MarketTape";
-import { Masthead } from "@/components/gazette/Masthead";
+import { AppHeader } from "@/components/watchdog/AppHeader";
+import { LiveTicker } from "@/components/watchdog/LiveTicker";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { PHARMA_SECTORS } from "@/convex/pharmaData";
 import { useAuth } from "@/hooks/use-auth";
+import { useNow } from "@/hooks/use-now";
 import { summarize, type BoardRow } from "@/lib/board";
-import { directionMark, formatClock, formatPercent, formatPrice } from "@/lib/format";
+import {
+  directionMark,
+  formatClock,
+  formatPercent,
+  formatPrice,
+  marketState,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowRight, Binary, Newspaper, Radar } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-const METHOD_STEPS = [
+const CAPABILITIES = [
   {
-    numeral: "I",
-    title: "Prices, not estimates",
-    body: "Last-traded levels for the covered NSE tickers, re-read continuously while the board is open and stamped in Indian Standard Time.",
+    icon: Radar,
+    title: "Live prices",
+    body: "Last-traded levels for every covered ticker, re-read on a timer and timestamped in Indian Standard Time. The tape pauses when the tab goes to the background.",
   },
   {
-    numeral: "II",
-    title: "The whole shelf, not a watchlist",
-    body: "Every covered pharmaceutical name is on the page from the first second — formulators, API and CDMO houses, MNC arms and biologics alike.",
+    icon: Binary,
+    title: "Key fundamentals",
+    body: "Open any company for its 52-week range, one-year and year-to-date returns, 30-day average volume and a full year of daily price history.",
   },
   {
-    numeral: "III",
-    title: "Breadth at a glance",
-    body: "Advancers against decliners, the session's best and worst movers, and a day-range bar against each name so one look covers the sector.",
+    icon: Newspaper,
+    title: "Recent headlines",
+    body: "The latest Indian market coverage for each company, pulled live and linked straight back to the publisher that filed it.",
   },
 ];
 
 export default function Landing() {
   const board = useQuery(api.pharma.list);
   const { isAuthenticated } = useAuth();
-  const now = new Date();
+  const now = useNow(1000 * 30);
 
   const companies = board?.companies ?? [];
   const summary = summarize(companies);
-  const boardHref = isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard";
+  const catalogHref = isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard";
+  const open = marketState(new Date(now)) === "open";
 
   const bySector = new Map<string, BoardRow[]>();
   for (const company of companies) {
@@ -46,67 +55,103 @@ export default function Landing() {
     else bySector.set(company.sector, [company]);
   }
 
-  const breadthTotal = summary.advancing + summary.declining + summary.unchanged;
-  const advancingShare = breadthTotal > 0 ? (summary.advancing / breadthTotal) * 100 : 50;
+  const statusRows: { key: string; value: ReactNode }[] = [
+    { key: "roster", value: `${companies.length} companies` },
+    { key: "desks", value: `${PHARMA_SECTORS.length} · formulations, api & cdmo, mnc, biologics` },
+    { key: "feed", value: "live · national stock exchange" },
+    {
+      key: "last read",
+      value: board?.quotesUpdatedAt ? formatClock(board.quotesUpdatedAt) : "waiting for first run",
+    },
+    {
+      key: "breadth",
+      value: summary.quoted > 0 ? (
+        <span className="flex items-center justify-end gap-3">
+          <span className="text-gain">▲ {summary.advancing}</span>
+          <span className="text-loss">▼ {summary.declining}</span>
+          <span className="text-muted-foreground">— {summary.unchanged}</span>
+        </span>
+      ) : (
+        <span className="text-muted-foreground">awaiting tape</span>
+      ),
+    },
+    {
+      key: "best / worst",
+      value: summary.topGainer && summary.topLoser ? (
+        <span className="flex items-center justify-end gap-3">
+          <span className="text-gain">
+            {summary.topGainer.symbol} {formatPercent(summary.topGainer.changePercent)}
+          </span>
+          <span className="text-loss">
+            {summary.topLoser.symbol} {formatPercent(summary.topLoser.changePercent)}
+          </span>
+        </span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+    },
+  ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="texture-newsprint bg-background text-foreground min-h-screen"
-    >
-      <Masthead
-        date={now}
+    <div className="texture-grid bg-background text-foreground min-h-screen">
+      <AppHeader
         actions={
           isAuthenticated ? (
-            <Button asChild size="sm" className="font-mono rounded-none text-[0.7rem] tracking-[0.14em] uppercase">
+            <Button
+              asChild
+              size="sm"
+              className="rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
+            >
               <Link to="/dashboard">
-                Open the board
+                Open catalog
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>
           ) : (
-            <Button asChild size="sm" className="font-mono rounded-none text-[0.7rem] tracking-[0.14em] uppercase">
-              <Link to={boardHref}>
-                <Lock className="size-3.5" />
+            <Button
+              asChild
+              size="sm"
+              className="rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
+            >
+              <Link to={catalogHref}>
                 Sign in
+                <ArrowRight className="size-3.5" />
               </Link>
             </Button>
           )
         }
-        className="border-foreground border-t-4"
       />
 
-      <p className="kicker text-muted-foreground mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6">
-        Market tape — live
-      </p>
-      <MarketTape companies={companies} className="mt-2" />
+      <LiveTicker companies={companies} />
 
-      <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6">
-        {/* ---------------------------------------------------------------- */}
-        {/* Front page                                                        */}
-        {/* ---------------------------------------------------------------- */}
-        <div className="border-foreground mt-8 grid border-b-2 pb-10 lg:grid-cols-12 lg:gap-0">
-          <article className="lg:border-border lg:col-span-8 lg:border-r lg:pr-10">
-            <p className="kicker text-primary">Market Desk · Lead</p>
-            <h2 className="font-masthead mt-3 text-[2.1rem] leading-[0.98] font-black tracking-tight sm:text-[2.75rem] lg:text-[3.4rem]">
-              The whole pharma shelf, priced live.
+      <div className="mx-auto w-full max-w-[1500px] px-4 sm:px-6">
+        {/* Hero ------------------------------------------------------------ */}
+        <div className="grid gap-10 py-12 lg:grid-cols-2 lg:gap-14 lg:py-16">
+          <div>
+            <p className="label text-primary">
+              <span className="text-muted-foreground">//</span> nse · pharmaceuticals · realtime
+            </p>
+            <h2 className="mt-5 font-mono text-3xl leading-[1.15] font-semibold tracking-[0.04em] sm:text-4xl lg:text-[2.75rem]">
+              A watchdog for the entire NSE pharma shelf.
             </h2>
-            <p className="border-border mt-5 border-y py-4 font-serif text-lg leading-snug italic sm:text-xl">
-              Forty-two pharmaceutical companies trade on the National Stock Exchange. This gazette
-              opens with all of them on one page — last traded price, the move on the day, the day's
-              range and volume — and keeps re-reading the market while you watch.
+            <p className="text-muted-foreground mt-5 max-w-xl text-sm leading-7">
+              Forty-two pharmaceutical companies trade on the National Stock Exchange. NSE Watchdog
+              keeps all of them in one searchable console — live prices, key fundamentals and recent
+              headlines — so the sector can be read in a single pass instead of a dozen browser tabs.
+            </p>
+            <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-7">
+              No watchlists to build and no symbols to paste. It is built for one user, and that user
+              is me.
             </p>
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button
                 asChild
                 size="lg"
-                className="font-mono rounded-none text-[0.72rem] tracking-[0.16em] uppercase"
+                className="rounded-none font-mono text-[0.72rem] tracking-[0.12em] uppercase"
               >
-                <Link to={boardHref}>
-                  Open the live board
+                <Link to={catalogHref}>
+                  Open the catalog
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
@@ -114,179 +159,133 @@ export default function Landing() {
                 asChild
                 size="lg"
                 variant="outline"
-                className="font-mono rounded-none text-[0.72rem] tracking-[0.16em] uppercase"
+                className="rounded-none font-mono text-[0.72rem] tracking-[0.12em] uppercase"
               >
-                <a href="#coverage">See the coverage</a>
+                <a href="#coverage">Browse coverage</a>
               </Button>
             </div>
+          </div>
 
-            <div className="mt-8 gap-8 sm:columns-2">
-              <p className="drop-cap font-serif text-[1.02rem] leading-7">
-                Most market screens ask you to build a watchlist before they will show you anything.
-                This one does not. The desk covers the Indian pharmaceutical sector end to end — the
-                large-cap formulators, the API and CDMO houses, the multi-national arms and the
-                biologics names — and prints them together, so a move in one is read against all the
-                rest of them.
-              </p>
-              <p className="font-serif mt-5 text-[1.02rem] leading-7">
-                Prices arrive from a live NSE-listed quote feed and are stamped in Indian Standard
-                Time. The tape refreshes on its own every twenty seconds while the board is open. When
-                the cash market is shut, the last published levels stay on the page beside their
-                timestamp, so nothing ever looks fresher than it is.
-              </p>
-              <p className="font-serif mt-5 text-[1.02rem] leading-7">
-                Sort by the day's move, search a symbol, or narrow the page to a single desk —
-                formulations, API and CDMO, MNC or biologics. Breadth, the best and worst performers
-                of the session, and the coverage count all sit above the table, so the sector reads at
-                a glance before you scroll.
+          {/* Live status terminal */}
+          <div className="border-border bg-card/60 relative overflow-hidden border">
+            <div className="border-border flex items-center gap-2 border-b px-4 py-2.5">
+              <span className="bg-loss/70 size-2.5 rounded-full" aria-hidden />
+              <span className="bg-chart-4/70 size-2.5 rounded-full" aria-hidden />
+              <span className="bg-gain/70 size-2.5 rounded-full" aria-hidden />
+              <span className="label-sm text-muted-foreground ml-2">watchdog — status</span>
+            </div>
+
+            <div className="px-4 py-3">
+              <p className="font-mono text-xs">
+                <span className="text-primary">$</span>{" "}
+                <span className="text-foreground">watchdog status --sector pharma</span>
               </p>
             </div>
-          </article>
 
-          {/* At a glance */}
-          <aside className="mt-10 lg:col-span-4 lg:mt-0 lg:pl-10">
-            <div className="border-foreground border-2">
-              <div className="border-foreground border-b-2 px-4 py-2">
-                <p className="kicker text-center">At a glance</p>
-              </div>
-              <div className="bg-card p-4">
-                {summary.quoted > 0 ? (
+            <div className="divide-border border-border border-t">
+              {statusRows.map((row) => (
+                <div
+                  key={row.key}
+                  className="border-border/70 flex items-baseline justify-between gap-4 border-b px-4 py-2.5 last:border-b-0"
+                >
+                  <span className="label-sm text-muted-foreground shrink-0">{row.key}</span>
+                  <span className="text-right font-mono text-xs">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-border border-t px-4 py-3">
+              <p className="label-sm text-muted-foreground">
+                {open ? (
                   <>
-                    <p className="font-mono tabular text-4xl font-semibold">{summary.quoted}</p>
-                    <p className="kicker text-muted-foreground mt-1">
-                      of {companies.length} names quoting
-                    </p>
-
-                    <div className="border-border mt-4 border-t pt-3">
-                      <div className="flex h-2.5 w-full overflow-hidden">
-                        <div className="bg-gain" style={{ width: `${advancingShare}%` }} />
-                        <div className="bg-loss" style={{ width: `${100 - advancingShare}%` }} />
-                      </div>
-                      <dl className="mt-3 space-y-1.5 font-mono text-xs">
-                        <div className="flex items-baseline justify-between">
-                          <dt className="text-muted-foreground">Advancing</dt>
-                          <dd className="tabular text-gain">{summary.advancing}</dd>
-                        </div>
-                        <div className="flex items-baseline justify-between">
-                          <dt className="text-muted-foreground">Declining</dt>
-                          <dd className="tabular text-loss">{summary.declining}</dd>
-                        </div>
-                        <div className="flex items-baseline justify-between">
-                          <dt className="text-muted-foreground">Unchanged</dt>
-                          <dd className="tabular text-muted-foreground">{summary.unchanged}</dd>
-                        </div>
-                      </dl>
-                    </div>
-
-                    <div className="border-border grid grid-cols-2 gap-4 border-t pt-3">
-                      <MiniMover label="Top gainer" row={summary.topGainer} />
-                      <MiniMover label="Top loser" row={summary.topLoser} />
-                    </div>
-
-                    <p className="border-border text-muted-foreground mt-4 border-t pt-3 font-mono text-[0.65rem]">
-                      Tape read {formatClock(board?.quotesUpdatedAt)}
-                    </p>
+                    <span className="text-gain">●</span> session running · refreshing every 20s
                   </>
                 ) : (
                   <>
-                    <p className="font-mono tabular text-4xl font-semibold">{companies.length}</p>
-                    <p className="kicker text-muted-foreground mt-1">names on the roster</p>
-                    <p className="border-border font-serif mt-4 border-t pt-3 text-sm leading-6">
-                      The live tape fills the moment a signed-in reader opens the board. Until then
-                      this page prints the roster alone.
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {PHARMA_SECTORS.map((sector) => (
-                        <span
-                          key={sector}
-                          className="border-border text-muted-foreground border px-2 py-1 font-mono text-[0.6rem] tracking-[0.1em] uppercase"
-                        >
-                          {sector}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="text-muted-foreground">●</span> market closed · showing last
+                    published levels
                   </>
                 )}
-              </div>
-            </div>
-
-            <div className="border-foreground mt-6 border-t-4 pt-4">
-              <p className="kicker text-muted-foreground">Today's edition</p>
-              <p className="font-masthead mt-2 text-lg leading-snug">
-                Printed continuously from Mumbai. Prices update every twenty seconds.
               </p>
             </div>
-          </aside>
+          </div>
         </div>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Method                                                            */}
-        {/* ---------------------------------------------------------------- */}
-        <section className="border-foreground border-b-2 py-10">
-          <div className="border-foreground flex items-baseline justify-between border-b pb-2">
-            <h3 className="font-masthead text-2xl font-bold tracking-tight sm:text-3xl">
-              How the desk is set
+        {/* Capabilities ---------------------------------------------------- */}
+        <section className="border-border border-t py-12">
+          <div className="border-border flex flex-wrap items-baseline justify-between gap-3 border-b pb-3">
+            <h3 className="font-mono text-lg font-semibold tracking-[0.08em]">
+              What it actually does
             </h3>
-            <span className="kicker text-muted-foreground hidden sm:inline">The method</span>
+            <span className="label-sm text-muted-foreground">three moving parts</span>
           </div>
 
-          <div className="grid divide-y lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-            {METHOD_STEPS.map((step) => (
-              <div key={step.numeral} className="lg:border-border py-6 lg:px-8 lg:first:pl-0 lg:last:pr-0">
-                <span className="font-masthead text-primary text-3xl font-black">{step.numeral}</span>
-                <h4 className="font-masthead mt-3 text-xl font-bold tracking-tight">{step.title}</h4>
-                <p className="font-serif text-muted-foreground mt-2 text-[0.95rem] leading-6">
-                  {step.body}
-                </p>
+          <div className="grid gap-px bg-border lg:grid-cols-3">
+            {CAPABILITIES.map((item) => (
+              <div key={item.title} className="bg-background p-6">
+                <span className="border-border bg-card/60 text-primary grid size-9 place-items-center border">
+                  <item.icon className="size-4" />
+                </span>
+                <h4 className="mt-4 font-mono text-sm font-semibold tracking-[0.08em]">
+                  {item.title}
+                </h4>
+                <p className="text-muted-foreground mt-3 text-xs leading-6">{item.body}</p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Coverage list                                                     */}
-        {/* ---------------------------------------------------------------- */}
-        <section id="coverage" className="border-foreground border-b-2 py-10">
-          <div className="border-foreground flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
-            <h3 className="font-masthead text-2xl font-bold tracking-tight sm:text-3xl">
-              The coverage list
+        {/* Coverage -------------------------------------------------------- */}
+        <section id="coverage" className="border-border border-t py-12">
+          <div className="border-border flex flex-wrap items-baseline justify-between gap-3 border-b pb-3">
+            <h3 className="font-mono text-lg font-semibold tracking-[0.08em]">
+              Coverage — every listed name
             </h3>
-            <span className="kicker text-muted-foreground">
-              {companies.length} NSE pharmaceutical listings
+            <span className="label-sm text-muted-foreground">
+              {companies.length} nse pharmaceutical listings
             </span>
           </div>
 
-          <div className="grid gap-x-8 gap-y-8 pt-8 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-x-8 gap-y-10 pt-8 md:grid-cols-2 xl:grid-cols-4">
             {PHARMA_SECTORS.map((sector) => {
               const rows = bySector.get(sector) ?? [];
               if (rows.length === 0) return null;
               return (
                 <div key={sector}>
-                  <p className="border-foreground border-b-2 pb-1.5 font-mono text-[0.68rem] font-semibold tracking-[0.16em] uppercase">
-                    {sector}
-                    <span className="text-muted-foreground ml-2 font-normal">{rows.length}</span>
+                  <p className="border-border text-foreground label-sm flex items-center justify-between border-b pb-2">
+                    <span>{sector}</span>
+                    <span className="text-muted-foreground">{rows.length}</span>
                   </p>
                   <ul className="divide-border divide-y">
                     {rows.map((row) => (
-                      <li
-                        key={row.symbol}
-                        className="flex items-baseline justify-between gap-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-mono text-[0.66rem] font-semibold tracking-[0.12em]">
-                            {row.symbol}
-                          </p>
-                          <p className="text-muted-foreground truncate font-serif text-[0.82rem]">
-                            {row.name}
-                          </p>
-                        </div>
-                        <span className="tabular font-mono text-xs whitespace-nowrap">
-                          {row.price === null ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            formatPrice(row.price)
-                          )}
-                        </span>
+                      <li key={row.symbol}>
+                        <Link
+                          to={`/stock/${row.symbol}`}
+                          className="hover:bg-accent/40 group -mx-2 flex items-baseline justify-between gap-3 px-2 py-2 transition-colors"
+                        >
+                          <span className="min-w-0">
+                            <span className="group-hover:text-primary block font-mono text-[0.68rem] font-medium tracking-[0.08em] transition-colors">
+                              {row.symbol}
+                            </span>
+                            <span className="text-muted-foreground block truncate text-[0.72rem]">
+                              {row.name}
+                            </span>
+                          </span>
+                          <span className="tabular shrink-0 font-mono text-[0.7rem]">
+                            {row.price === null ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <span
+                                className={cn(
+                                  (row.changePercent ?? 0) >= 0 ? "text-gain" : "text-loss",
+                                )}
+                              >
+                                {directionMark(row.changePercent)}{" "}
+                                {formatPercent(row.changePercent)}
+                              </span>
+                            )}
+                          </span>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -296,27 +295,30 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Closing call                                                      */}
-        {/* ---------------------------------------------------------------- */}
-        <section className="bg-foreground text-background texture-newsprint border-foreground my-10 border-2 px-6 py-10 text-center sm:px-12">
-          <p className="kicker text-background/60">Read the market as it moves</p>
-          <h3 className="font-masthead mx-auto mt-4 max-w-3xl text-3xl leading-[1.02] font-black tracking-tight sm:text-5xl">
-            The sector, on one page, the moment you open it.
+        {/* Closing call ---------------------------------------------------- */}
+        <motion.section
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="border-border bg-card/60 texture-dots my-12 border p-8 sm:p-12"
+        >
+          <p className="label text-primary">ready when you are</p>
+          <h3 className="mt-4 max-w-2xl font-mono text-2xl leading-snug font-semibold tracking-[0.04em] sm:text-3xl">
+            Sign in and the tape starts running immediately.
           </h3>
-          <p className="text-background/75 mx-auto mt-4 max-w-xl font-serif text-base leading-7 italic">
-            Sign in and the tape starts running immediately. Guest access is available if you would
-            rather look before you subscribe.
+          <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-7">
+            Live prices, key fundamentals and recent headlines for all{" "}
+            {companies.length > 0 ? companies.length : 42} covered companies. Guest access is
+            available if you would rather look around first.
           </p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <Button
               asChild
               size="lg"
-              variant="secondary"
-              className="font-mono rounded-none text-[0.72rem] tracking-[0.16em] uppercase"
+              className="rounded-none font-mono text-[0.72rem] tracking-[0.12em] uppercase"
             >
-              <Link to={boardHref}>
-                Open the live board
+              <Link to={catalogHref}>
+                Open the catalog
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -324,53 +326,26 @@ export default function Landing() {
               asChild
               size="lg"
               variant="outline"
-              className="border-background/40 text-background hover:bg-background/10 hover:text-background font-mono rounded-none bg-transparent text-[0.72rem] tracking-[0.16em] uppercase"
+              className="rounded-none font-mono text-[0.72rem] tracking-[0.12em] uppercase"
             >
-              <a href="#coverage">Browse the roster</a>
+              <Link to="/auth">Use guest access</Link>
             </Button>
           </div>
-        </section>
+        </motion.section>
 
-        <footer className="border-foreground text-muted-foreground border-t-2 py-6 font-serif text-[0.78rem] leading-6">
+        <footer className="border-border text-muted-foreground border-t py-6 font-mono text-[0.7rem] leading-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <p className="max-w-2xl">
-              <span className="text-foreground font-semibold">Method &amp; corrections:</span>{" "}
-              symbols are the NSE tickers for the covered companies. Quotes come from a public
-              NSE-listed market feed and are refreshed every twenty seconds while the board is open.
-              Levels are indicative, may be delayed outside market hours, and are published here for
-              personal reference only.
+            <p className="max-w-3xl">
+              <span className="text-foreground">method:</span> symbols are the NSE tickers for the
+              covered companies. Prices, fundamentals and headlines come from public NSE-listed
+              market and newswire feeds, refreshed on a timer while the console is open. Levels are
+              indicative, may be delayed outside market hours, and are published for personal
+              reference only.
             </p>
-            <p className="font-mono text-[0.65rem] tracking-[0.12em] uppercase">
-              Not investment advice
-            </p>
+            <p className="label-sm">not investment advice</p>
           </div>
         </footer>
       </div>
-    </motion.div>
-  );
-}
-
-function MiniMover({ label, row }: { label: string; row: BoardRow | null }) {
-  return (
-    <div>
-      <p className="kicker text-muted-foreground">{label}</p>
-      {row ? (
-        <>
-          <p className="mt-1.5 font-mono text-[0.7rem] font-semibold tracking-[0.12em]">
-            {row.symbol}
-          </p>
-          <p
-            className={cn(
-              "tabular mt-0.5 font-mono text-xs",
-              (row.changePercent ?? 0) >= 0 ? "text-gain" : "text-loss",
-            )}
-          >
-            {directionMark(row.changePercent)} {formatPercent(row.changePercent)}
-          </p>
-        </>
-      ) : (
-        <p className="text-muted-foreground mt-1.5 font-mono text-xs">—</p>
-      )}
     </div>
   );
 }

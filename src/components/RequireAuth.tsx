@@ -1,5 +1,5 @@
+import { AppHeader } from "@/components/watchdog/AppHeader";
 import { Button } from "@/components/ui/button";
-import { Masthead } from "@/components/gazette/Masthead";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Lock } from "lucide-react";
 import type { ReactNode } from "react";
@@ -8,16 +8,14 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 /**
  * Wraps a route that requires a signed-in user.
  *
- * Signed-out visitors used to be bounced straight to `/auth`, which left them
- * on a bare sign-in form with no idea which page they had asked for or why they
- * were moved. The block is now stated on the page they landed on, and sign-in
- * still returns them to it via `returnTo`. Pass `redirectImmediately` for a
+ * Signed-out visitors see why they were stopped, on the page they asked for, and
+ * sign-in returns them to it via `returnTo`. Pass `redirectImmediately` for a
  * route where the bounce really is the better experience.
  */
 export function RequireAuth({
   children,
-  title = "Sign in to continue",
-  description = "This page is only available to signed-in users.",
+  title = "Sign in to open the console",
+  description = "Prices, fundamentals and headlines are only served to signed-in readers.",
   redirectImmediately = false,
 }: {
   children: ReactNode;
@@ -34,8 +32,8 @@ export function RequireAuth({
 
   if (isLoading) {
     return (
-      <main className="bg-background texture-newsprint flex min-h-screen items-center justify-center">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+      <main className="texture-grid bg-background flex min-h-screen items-center justify-center">
+        <Loader2 className="text-muted-foreground size-5 animate-spin" />
       </main>
     );
   }
@@ -49,34 +47,37 @@ export function RequireAuth({
     }
 
     return (
-      <main className="bg-background texture-newsprint text-foreground flex min-h-screen flex-col p-4 sm:p-8">
-        <Masthead size="compact" date={new Date()} className="mb-12 border-t-4" />
-        <div className="flex flex-1 items-center justify-center">
-          <div className="border-foreground bg-card w-full max-w-md border-2">
-            <div className="border-foreground border-b-2 px-5 py-2.5">
-              <p className="kicker text-center">Hold the front page</p>
+      <main className="texture-grid bg-background text-foreground flex min-h-screen flex-col">
+        <AppHeader size="compact" />
+        <div className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6">
+          <div className="border-border bg-card/60 w-full max-w-lg border">
+            <div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
+              <p className="label text-foreground">access restricted</p>
+              <p className="label-sm text-muted-foreground">auth required</p>
             </div>
-            <div className="px-6 py-8 text-center">
-              <div className="bg-muted mx-auto flex size-12 items-center justify-center rounded-full">
-                <Lock className="text-muted-foreground size-5" />
-              </div>
-              <h2 className="font-masthead mt-5 text-2xl font-black tracking-tight">{title}</h2>
-              <p className="text-muted-foreground mt-2 font-serif text-sm leading-6 italic">
-                {description}
+
+            <div className="p-6 sm:p-8">
+              <span className="border-border bg-muted/50 text-muted-foreground grid size-10 place-items-center border">
+                <Lock className="size-4" />
+              </span>
+              <h2 className="mt-5 font-mono text-xl font-semibold tracking-[0.06em]">{title}</h2>
+              <p className="text-muted-foreground mt-3 text-xs leading-6">{description}</p>
+              <p className="border-border text-muted-foreground mt-5 border-t pt-4 font-mono text-xs leading-6">
+                You will come straight back to{" "}
+                <span className="text-foreground break-all">{location.pathname}</span> once you are
+                signed in.
               </p>
-              <p className="text-muted-foreground border-border mt-5 border-t pt-4 font-serif text-sm leading-6">
-                You will come straight back to this page once you are signed in.
-              </p>
+
               <div className="mt-6 flex flex-col gap-2">
                 <Button
-                  className="font-mono h-11 w-full rounded-none text-[0.68rem] tracking-[0.14em] uppercase"
+                  className="h-11 w-full rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
                   onClick={() => navigate(signInHref)}
                 >
                   Sign in
                 </Button>
                 <Button
                   variant="ghost"
-                  className="font-mono h-11 w-full rounded-none text-[0.68rem] tracking-[0.14em] uppercase"
+                  className="h-11 w-full rounded-none font-mono text-[0.68rem] tracking-[0.1em] uppercase"
                   onClick={() => navigate("/")}
                 >
                   Back to the front page

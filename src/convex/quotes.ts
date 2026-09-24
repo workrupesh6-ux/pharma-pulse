@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { PHARMA_COMPANIES } from "./pharmaData";
@@ -121,24 +122,33 @@ async function fetchQuote(symbol: string): Promise<Quote> {
   return last ?? { symbol, updatedAt, error: "Unreachable" };
 }
 
+
 /**
- * Pulls the latest price for every covered pharma company and caches it.
+ * Pulls the latest price for the covered pharma companies and caches it.
  *
- * Signed-in only: this makes outbound requests on the deployment's behalf, so
- * it should not be an open relay. The reading board itself stays public.
+ * Signed-in only: this makes outbound requests on the deployment's behalf, so it
+ * should not be an open relay. The reading board itself stays public. Pass
+ * `symbols` to refresh a single ticker — the detail page does this so one price
+ * does not cost forty-two requests.
  */
 export const refresh = action({
-  args: {},
-  handler: async (ctx) => {
+  args: { symbols: v.optional(v.array(v.string())) },
+  handler: async (ctx, { symbols }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Sign in to refresh live market prices.");
     }
 
+    const wanted = symbols?.map((symbol) => symbol.trim().toUpperCase());
+    const targets =
+      wanted && wanted.length > 0
+        ? PHARMA_COMPANIES.filter((company) => wanted.includes(company.symbol))
+        : PHARMA_COMPANIES;
+
     const quotes: Quote[] = [];
 
-    for (let i = 0; i < PHARMA_COMPANIES.length; i += BATCH_SIZE) {
-      const batch = PHARMA_COMPANIES.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      const batch = targets.slice(i, i + BATCH_SIZE);
       quotes.push(...(await Promise.all(batch.map((company) => fetchQuote(company.symbol)))));
     }
 
