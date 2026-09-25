@@ -78,10 +78,13 @@ export default function Dashboard() {
   };
 
   /**
-   * Re-reads the exchange's equity master and rebuilds the roster from it.
-   * Deliberately out of the twenty-second quote loop — a sweep downloads a
-   * whole listed-company file — but it runs once by itself on the first visit,
-   * so the desk starts at full width instead of at the curated seed.
+   * Re-reads the coverage sources and rebuilds the roster from them: the
+   * TradingView industry screen for what each company does, the exchange's
+   * equity master for what is actually listed, and the keyword pass for the
+   * names neither of those caught. Deliberately out of the twenty-second quote
+   * loop — a sweep pulls a whole sector and a whole listed-company file — but
+   * it runs once by itself on the first visit, so the desk starts at full
+   * width instead of at the curated seed.
    */
   const handleSyncCoverage = useCallback(async () => {
     if (isSyncing) return;
@@ -91,7 +94,7 @@ export default function Dashboard() {
       const result = await syncCoverage({});
       setSyncMessage(
         result.ok
-          ? `Master swept: ${result.matched} keyword matches among ${result.equityListings} NSE listings — ${result.added} added, ${result.retired} retired, ${result.rejected} set aside by industry.`
+          ? `Swept ${result.equityListings} NSE listings — ${result.screened} filed by TradingView industry, ${result.matched} by keyword — ${result.added} added, ${result.retired} retired, ${result.rejected} set aside by industry.`
           : `Sweep failed: ${result.error ?? "the NSE equity master was unreachable"}.`,
       );
     } catch (err) {
@@ -196,13 +199,21 @@ export default function Dashboard() {
         <div className="border-primary/50 text-muted-foreground mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-l-2 pl-4 font-mono text-[0.7rem] leading-6">
           <span className="label-sm text-foreground">coverage</span>
           <span aria-hidden="true">·</span>
-          <span>{synced ? "auto-synced from the NSE equity master" : "curated seed roster"}</span>
+          <span>{synced ? "auto-synced · tradingview screen + nse master" : "curated seed roster"}</span>
           {coverage && coverage.ok ? (
             <>
               <span aria-hidden="true">·</span>
               <span>
-                {coverage.matched} keyword matches among {coverage.equityListings} NSE listings
+                {coverage.equityListings} NSE listings, {coverage.matched} by keyword
               </span>
+              {coverage.screened > 0 ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span title="Names TradingView's Indian industry classification files under Pharmaceuticals or Biotechnology.">
+                    {coverage.screened} screened by industry
+                  </span>
+                </>
+              ) : null}
               {coverage.rejected > 0 ? (
                 <>
                   <span aria-hidden="true">·</span>
@@ -398,9 +409,10 @@ export default function Dashboard() {
           <p>
             <span className="text-foreground">note:</span> levels are indicative and may be delayed
             outside NSE cash-market hours (09:15–15:30 IST, Monday to Friday, holidays excepted).
-            Coverage is swept from NSE's own equity master file and then filed by desk with a
-            keyword classifier, so an unusual registered name can slip through in either direction
-            — re-run Sync coverage to re-read the master. Scope is pharmaceutical manufacturers;
+            Coverage is screened with TradingView's Indian industry classification and crossed
+            against NSE's own equity master file, with a keyword pass over registered names as the
+            fallback — so an unusual name can still slip through in either direction. Re-run Sync
+            coverage to re-read both. Scope is pharmaceutical manufacturers;
             hospital, diagnostic-lab and medical-device listings are not tracked. Personal
             reference only — not investment advice.
           </p>

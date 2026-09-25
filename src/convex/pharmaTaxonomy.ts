@@ -159,9 +159,18 @@ const API_CDMO_MARKERS: readonly string[] = [
   "peptide",
 ];
 
-/** Which desk a discovered name belongs on. */
-function deskFor(name: string): PharmaSector {
-  const has = (markers: readonly string[]) => markers.some((marker) => name.includes(marker));
+/**
+ * Which desk a name belongs on, judged from the name alone. Exported because
+ * the screener in tvScreener.ts files its own rows with the same markers, so a
+ * name never lands on one desk when it is discovered and another when it is
+ * screened.
+ */
+export function deskForName(name: string): PharmaSector {
+  // Normalised here rather than at the call site: the classifier hands over an
+  // already-lowercased name, but the screener passes its own display-case
+  // company name, and every marker is lowercase.
+  const needle = name.toLowerCase();
+  const has = (markers: readonly string[]) => markers.some((marker) => needle.includes(marker));
 
   if (has(MNC_MARKERS)) return "MNC Pharma";
   if (has(WELLNESS_MARKERS)) return "Ayurveda & Wellness";
@@ -180,5 +189,5 @@ export function classifyListing(name: string): PharmaSector | null {
   if (OUT_OF_SCOPE.some((pattern) => pattern.test(needle))) return null;
   if (!IN_SCOPE.some((pattern) => pattern.test(needle))) return null;
 
-  return deskFor(needle);
+  return deskForName(needle);
 }

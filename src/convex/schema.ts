@@ -15,7 +15,11 @@ export const pharmaSectorValidator = v.union(
   v.literal(PHARMA_SECTORS[4]),
 );
 
-export const pharmaSourceValidator = v.union(v.literal("seed"), v.literal("nse-master"));
+export const pharmaSourceValidator = v.union(
+  v.literal("seed"),
+  v.literal("nse-master"),
+  v.literal("tradingview"),
+);
 
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
@@ -57,14 +61,19 @@ const schema = defineSchema(
       symbol: v.string(),
       name: v.string(),
       sector: pharmaSectorValidator,
-      /** Whether the row came from the curated seed or the NSE master file. */
+      /**
+       * Where the row came from: the curated seed, a keyword match on the NSE
+       * master file, or TradingView's industry screen.
+       */
       source: pharmaSourceValidator,
       isin: v.optional(v.string()),
       /** Listing date from the master file, epoch ms. */
       listedAt: v.optional(v.number()),
       /**
-       * The quote feed's industry label, recorded when the name was judged.
-       * Its presence is also the memo that says "do not look this one up again".
+       * The industry label recorded when the name was judged — from the
+       * screener for a screened name, from the quote feed for a keyword match.
+       * Its presence is also the memo that says "do not look this one up
+       * again".
        */
       industry: v.optional(v.string()),
       /** Set once the quote feed has returned a real price for this symbol. */
@@ -85,6 +94,8 @@ const schema = defineSchema(
       equityListings: v.number(),
       /** Listings whose registered name carried a pharmaceutical keyword. */
       matched: v.number(),
+      /** NSE names read straight off TradingView's industry classification. */
+      screened: v.number(),
       /** Of those, the names the industry check set aside as not drug makers. */
       rejected: v.number(),
       /** Curated seed names carried onto the roster. */

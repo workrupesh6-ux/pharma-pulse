@@ -4,6 +4,7 @@ import { action, internalMutation, internalQuery } from "./_generated/server";
 import { fetchEquityMaster } from "./nseMaster";
 import { classifyListing } from "./pharmaTaxonomy";
 import { fetchIndustry } from "./industryLookup";
+import { fetchPharmaScreenings } from "./tvScreener";
 import { PHARMA_COMPANIES, type PharmaSector } from "./pharmaData";
 import { pharmaSectorValidator, pharmaSourceValidator } from "./schema";
 
@@ -18,10 +19,15 @@ import { pharmaSectorValidator, pharmaSourceValidator } from "./schema";
  * write. The curated list in pharmaData.ts is folded in as the seed, so nothing
  * already on the board can be dropped by a sweep.
  *
- * A name earns its place in three steps: the exchange lists it, a keyword in
- * its registered name says pharmaceutical, and the feed agrees it is a drug
- * maker rather than a hospital, a lab or a chemical works. Rulings are stored on
- * the row, so a sweep only ever looks up the names it has not judged before.
+ * A name earns its place one of two ways. The preferred route is TradingView's
+ * industry classification for the Indian market: a listing it files under
+ * Pharmaceuticals or Biotechnology is a drug maker by someone else's judgement,
+ * which is how the houses whose registered names carry no pharmaceutical word
+ * at all get found — Cipla, Lupin, Biocon, Dr Reddy's. The fallback route is
+ * the older one: a keyword in the registered name, plus the quote feed agreeing
+ * the company is a drug maker rather than a hospital, a lab or a chemical
+ * works. Either way the ruling is stored on the row, so a sweep only ever
+ * judges what it has not judged before.
  *
  * A symbol is only trusted once the quote feed has answered for it: the roster
  * carries the row, and the next quote pass stamps `verifiedAt` on anything that
@@ -44,7 +50,7 @@ type RosterEntry = {
   symbol: string;
   name: string;
   sector: PharmaSector;
-  source: "seed" | "nse-master";
+  source: "seed" | "nse-master" | "tradingview";
   isin?: string;
   listedAt?: number;
   /** The feed's industry label, once a discovered name has been ruled on. */
@@ -65,6 +71,8 @@ type SyncOutcome = {
   equityListings: number;
   /** Equity listings whose registered name carried a pharmaceutical keyword. */
   matched: number;
+  /** NSE pharma names read straight off TradingView's industry classification. */
+  screened: number;
   /** Of those, the names the industry check set aside as not drug makers. */
   rejected: number;
   seeded: number;
@@ -93,7 +101,7 @@ export const sync = action({
       throw new Error("Sign in to sync the coverage list from the NSE equity master.");
     }
 
-    const master = await fetchEquityMaster();
+    const [master, screenings] = await Promise.all([fetchEquityMaster(), fetchPharmaScreenings()]);
     const updatedAt = Date.now();
 
     if (!master) {
@@ -107,6 +115,7 @@ export const sync = action({
         listingsScanned: 0,
         equityListings: 0,
         matched: 0,
+        screened: 0,
         rejected: 0,
         seeded: PHARMA_COMPANIES.length,
         discovered: 0,
@@ -136,6 +145,34 @@ export const sync = action({
         active: true,
       });
       seen.add(company.symbol);
+    }
+
+    // TradingView's industry screen goes on next, and only for symbols the
+    // exchange itself lists as equity. The division of labour is deliberate:
+    // the screen is authoritative about what a company does, the master is
+    // authoritative about whether NSE trades it, and a name that fails the
+    // second test has no quote feed to read anyway. A screened name needs no
+    // further cross-check — a real industry label is exactly what the keyword
+    // route was trying to approximate.
+    let screened = 0;
+    if (screenings) {
+      for (const row of screenings) {
+        const listing = bySymbol.get(row.symbol);
+        if (!listing || seen.has(row.symbol)) continue;
+
+        seen.add(row.symbol);
+        screened += 1;
+        entries.push({
+          symbol: row.symbol,
+          name: row.name,
+          sector: row.sector,
+          source: "tradingview",
+          isin: listing.isin,
+          listedAt: listing.listedAt,
+          industry: row.industry,
+          active: true,
+        });
+      }
     }
 
     const candidates: { listing: (typeof equityListings)[number]; sector: PharmaSector }[] = [];
@@ -193,7 +230,7 @@ export const sync = action({
 
     const seeded = PHARMA_COMPANIES.length;
     const discovered = entries.filter(
-      (entry) => entry.source === "nse-master" && entry.active,
+      (entry) => entry.source !== "seed" && entry.active,
     ).length;
     const matched = candidates.length;
 
@@ -202,6 +239,7 @@ export const sync = action({
       listingsScanned: master.length,
       equityListings: equityListings.length,
       matched,
+      screened,
       rejected,
       seeded,
       discovered,
@@ -213,6 +251,7 @@ export const sync = action({
       listingsScanned: master.length,
       equityListings: equityListings.length,
       matched,
+      screened,
       rejected,
       seeded,
       discovered,
@@ -254,6 +293,7 @@ export const replaceRoster = internalMutation({
     listingsScanned: v.number(),
     equityListings: v.number(),
     matched: v.number(),
+    screened: v.number(),
     rejected: v.number(),
     seeded: v.number(),
     discovered: v.number(),
@@ -307,6 +347,7 @@ export const replaceRoster = internalMutation({
       listingsScanned: args.listingsScanned,
       equityListings: args.equityListings,
       matched: args.matched,
+      screened: args.screened,
       rejected: args.rejected,
       seeded: args.seeded,
       discovered: args.discovered,
@@ -328,6 +369,7 @@ export const recordFailure = internalMutation({
       listingsScanned: 0,
       equityListings: 0,
       matched: 0,
+      screened: 0,
       rejected: 0,
       seeded: PHARMA_COMPANIES.length,
       discovered: 0,

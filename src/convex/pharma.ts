@@ -73,6 +73,7 @@ async function loadCoverage(ctx: QueryCtx) {
     listingsScanned: row.listingsScanned,
     equityListings: row.equityListings,
     matched: row.matched,
+    screened: row.screened ?? 0,
     rejected: row.rejected ?? 0,
     seeded: row.seeded,
     discovered: row.discovered,
