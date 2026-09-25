@@ -341,11 +341,11 @@ export default function StockDetail() {
         {/* Desk note ------------------------------------------------------- */}
         <Panel
           className="mt-6"
-          title="desk note · claude"
+          title="desk note · gemini"
           meta={
             brief
               ? [
-                  brief.model ?? "claude",
+                  brief.model ?? "gemini",
                   `written ${formatRelative(brief.updatedAt, now)}`,
                   deskNote.isWriting ? "rewriting…" : null,
                 ]
@@ -392,7 +392,7 @@ export default function StockDetail() {
             </div>
           ) : (
             <p className="text-muted-foreground font-mono text-xs leading-6">
-              Claude reads this company&apos;s cached quote, fundamentals and headlines and writes a
+              Gemini reads this company&apos;s cached quote, fundamentals and headlines and writes a
               short desk note from them — nothing it cannot see on this page. It is written once and
               cached; use Rewrite to refresh it.
             </p>
@@ -483,7 +483,7 @@ export default function StockDetail() {
           <p>
             <span className="text-foreground">note:</span> fundamentals are derived from one year of
             real NSE price history; headlines are pulled from a public Indian news feed and link to
-            the original publishers. The desk note is written by Claude from those same cached
+            the original publishers. The desk note is written by Gemini from those same cached
             numbers and headlines — it adds no outside data and is not investment advice. Levels are
             indicative and may be delayed outside market hours (09:15–15:30 IST, Monday to Friday).
             Personal reference only.

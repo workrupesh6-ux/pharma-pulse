@@ -8,7 +8,7 @@ const NOTE_TTL_MS = 6 * 60 * 60 * 1000;
 const RETRY_AFTER_FAILURE_MS = 60 * 1000;
 
 /**
- * Writes the Claude desk note for one company.
+ * Writes the Gemini desk note for one company.
  *
  * Notes are cached in Convex, so this only calls the model when the cached
  * copy is missing or older than its TTL — a page view on a company that

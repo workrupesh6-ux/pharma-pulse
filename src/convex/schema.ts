@@ -160,7 +160,7 @@ const schema = defineSchema(
       error: v.optional(v.string()),
     }).index("by_symbol", ["symbol"]),
 
-    // The desk note: a short Claude-written read of one company's own quote,
+    // The desk note: a short Gemini-written read of one company's own quote,
     // fundamentals and headlines. Written on demand and cached, so a page view
     // never costs a model call unless the note is missing or stale.
     pharmaBriefs: defineTable({

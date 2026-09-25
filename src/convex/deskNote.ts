@@ -7,24 +7,28 @@ import { api, internal } from "./_generated/api";
 /**
  * The desk note.
  *
- * Claude is handed one company's own cached facts — live quote, key
+ * Gemini is handed one company's own cached facts — live quote, key
  * fundamentals and the headlines already on file — and asked for a short desk
  * read of them. It is not asked to look anything up: the note may only
  * describe the numbers and headlines in front of it, and it has to say when
  * the data is thin. That keeps the output checkable against the panels above
  * it on the page.
  *
- * The call is made straight to the Anthropic Messages API over `fetch`, so the
- * deployment needs nothing but the API key: `ANTHROPIC_API_KEY`, set in the
- * project's Keys tab. Results are cached in Convex and only rewritten on
+ * The call is made straight to the Gemini API over `fetch`, so the deployment
+ * needs nothing but the API key, set in the project's Keys tab. Either of the
+ * two names Google's own tooling uses will do — `GEMINI_API_KEY` or
+ * `GOOGLE_API_KEY`. Results are cached in Convex and only rewritten on
  * request, so browsing the board never burns tokens on its own.
  */
-const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
-const API_VERSION = "2023-06-01";
-/** Sonnet is the sensible cost/latency point for a short per-ticker note. */
-const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 900;
-const REQUEST_TIMEOUT_MS = 30_000;
+const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+/** Flash is the sensible cost/latency point for a short per-ticker note. */
+const MODEL = "gemini-3.8-flash";
+/**
+ * Gemini 3 reasons before it answers, and the thinking tokens come out of the
+ * same budget as the note, so leave generous headroom above ~300 words.
+ */
+const MAX_OUTPUT_TOKENS = 4096;
+const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_BODY_LENGTH = 4000;
 const MAX_HEADLINES = 8;
 
@@ -135,45 +139,55 @@ function readError(body: string): string {
   return body.replace(/\s+/g, " ").trim().slice(0, 200) || "Unknown error";
 }
 
-type MessagesResponse = {
-  content?: { type?: string; text?: string }[];
+type GenerateResponse = {
+  candidates?: {
+    content?: { parts?: { text?: string }[] };
+    finishReason?: string;
+  }[];
+  promptFeedback?: { blockReason?: string };
   error?: { message?: string };
 };
 
-async function writeWithClaude(apiKey: string, facts: string): Promise<{ body: string; model: string }> {
+async function writeWithGemini(apiKey: string, facts: string): Promise<{ body: string; model: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(MESSAGES_URL, {
+    const response = await fetch(`${ENDPOINT}/${MODEL}:generateContent`, {
       method: "POST",
       signal: controller.signal,
       headers: {
         "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": API_VERSION,
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: facts }],
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ text: facts }] }],
+        generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
       }),
     });
 
-    const payload = (await response.json()) as MessagesResponse;
+    const payload = (await response.json()) as GenerateResponse;
 
     if (!response.ok) {
       throw new Error(payload.error?.message?.slice(0, 200) ?? `HTTP ${response.status}`);
     }
 
-    const body = (payload.content ?? [])
-      .filter((block) => block.type === "text" && block.text)
-      .map((block) => block.text?.trim() ?? "")
+    const candidate = payload.candidates?.[0];
+    const body = (candidate?.content?.parts ?? [])
+      .map((part) => part.text?.trim() ?? "")
       .filter(Boolean)
       .join("\n\n");
 
-    if (!body) throw new Error("The model returned an empty note.");
+    if (!body) {
+      if (payload.promptFeedback?.blockReason) {
+        throw new Error(`Gemini declined the request (${payload.promptFeedback.blockReason}).`);
+      }
+      if (candidate?.finishReason === "MAX_TOKENS") {
+        throw new Error("Gemini ran out of output budget before writing the note.");
+      }
+      throw new Error("Gemini returned an empty note.");
+    }
 
     return { body: body.slice(0, MAX_BODY_LENGTH), model: MODEL };
   } finally {
@@ -191,18 +205,20 @@ export const writeNote = action({
     const detail = await ctx.runQuery(api.stock.detail, { symbol: ticker });
     if (!detail) throw new Error(`${ticker} is not on the roster.`);
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
     if (!apiKey) {
+      const message =
+        "Gemini is not configured — add GEMINI_API_KEY (or GOOGLE_API_KEY) in the Keys tab.";
       await ctx.runMutation(internal.stock.upsertBrief, {
         symbol: ticker,
         updatedAt: Date.now(),
-        error: "Claude is not configured — add ANTHROPIC_API_KEY in the Keys tab.",
+        error: message,
       });
-      return { ok: false, error: "Claude is not configured — add ANTHROPIC_API_KEY in the Keys tab." };
+      return { ok: false, error: message };
     }
 
     try {
-      const note = await writeWithClaude(apiKey, factSheet(detail, Date.now()));
+      const note = await writeWithGemini(apiKey, factSheet(detail, Date.now()));
       await ctx.runMutation(internal.stock.upsertBrief, {
         symbol: ticker,
         body: note.body,
