@@ -1,4 +1,8 @@
-.env.local
+# Real secrets never get committed. Keep the example template shareable.
+.env
+.env.*
+!.env.example
+
 node_modules
 dist
 src/convex/_generated
